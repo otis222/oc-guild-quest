@@ -6,6 +6,12 @@ import type { Viewport } from './viewport';
 
 const MOVE_KEYS = ['w', 'a', 's', 'd', 'arrowup', 'arrowdown', 'arrowleft', 'arrowright'];
 
+/** 正在輸入框裡打字（含中文選字）時，按鍵不能拿去走路 */
+function isTyping(e: KeyboardEvent): boolean {
+  const t = e.target;
+  return e.isComposing || (t instanceof HTMLElement && (t.isContentEditable || ['INPUT', 'TEXTAREA', 'SELECT'].includes(t.tagName)));
+}
+
 interface Drag { x: number; y: number; sx: number; sy: number; moved: boolean }
 
 export class Input {
@@ -20,10 +26,12 @@ export class Input {
     const host = vp.el;
 
     addEventListener('keydown', (e) => {
+      if (isTyping(e)) return;
       const k = e.key.toLowerCase();
       if (MOVE_KEYS.includes(k)) { this.keys.add(k); e.preventDefault(); }
     });
-    addEventListener('keyup', (e) => this.keys.delete(e.key.toLowerCase()));
+    // 瀏覽器自動填入時送出的按鍵事件可能沒有 key
+    addEventListener('keyup', (e) => { if (e.key) this.keys.delete(e.key.toLowerCase()); });
 
     const pointers = new Map<number, { x: number; y: number }>();
     let drag: Drag | null = null, pinch0 = 0;

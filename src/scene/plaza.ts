@@ -31,8 +31,8 @@ export interface Plaza {
   toggleTime(): boolean;
   /** 在地板上點的位置閃一下白圈 */
   showMarker(x: number, z: number): void;
-  /** 每幀更新：天色漸變、水滴、寶石、雲、石頭、選取光圈 */
-  update(dt: number, t: number, selectedPos: THREE.Vector3): void;
+  /** 每幀更新：天色漸變、水滴、寶石、雲、石頭、選取光圈（selectedPos 是 null 時不顯示光圈） */
+  update(dt: number, t: number, selectedPos: THREE.Vector3 | null): void;
 }
 
 export function createPlaza(): Plaza {
@@ -289,7 +289,8 @@ export function createPlaza(): Plaza {
       });
       clouds.forEach((c) => { c.position.x += c.userData.speed * dt; if (c.position.x > 52) c.position.x = -52; });
       rocks.position.y = Math.sin(t * 0.6) * 0.12;
-      selRing.position.set(selectedPos.x, 0.03, selectedPos.z);
+      selRing.visible = selectedPos !== null;
+      if (selectedPos) selRing.position.set(selectedPos.x, 0.03, selectedPos.z);
       selRing.scale.setScalar(1 + Math.sin(t * 5) * 0.06);
       selRing.material.opacity = 0.75 + Math.sin(t * 5) * 0.15;
       if (markerT < 1) { markerT += dt * 1.6; marker.scale.setScalar(1 + markerT * 2.2); marker.material.opacity = (1 - markerT) * 0.9; }

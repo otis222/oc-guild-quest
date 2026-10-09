@@ -10,14 +10,17 @@
 <div class="top">
   <div class="title panel">
     <h1>OC 巡展廣場 <span class="chip">DEMO</span></h1>
-    <p>點小人選取，點地板讓它走過去；WASD／方向鍵也能走。拖曳轉鏡頭，滾輪或雙指縮放。</p>
+    <p>點地板讓你的 OC 走過去；WASD／方向鍵也能走。拖曳轉鏡頭，滾輪或雙指縮放。</p>
   </div>
   <div class="actions">
     <button id="btnHi" type="button">全員打招呼</button>
     <button id="btnTime" type="button">切換黃昏</button>
   </div>
 </div>
-<nav class="roster" id="roster" aria-label="角色列表"></nav>
+<nav class="dock" aria-label="公會">
+  <button id="btnBoard" type="button" disabled>委託板</button>
+  <button id="btnCard" type="button" disabled>OC 設定卡</button>
+</nav>
 <div id="loading">場景載入中…</div>
 <script type="module" src="/src/main.ts"></script>
 </body>

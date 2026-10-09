@@ -1,0 +1,23 @@
+{
+  "version": "0.0.1",
+  "configurations": [
+    {
+      "name": "dev",
+      "runtimeExecutable": "npm",
+      "runtimeArgs": ["run", "dev", "--", "--port", "5173", "--strictPort"],
+      "port": 5173
+    },
+    {
+      "name": "preview",
+      "runtimeExecutable": "npm",
+      "runtimeArgs": ["run", "preview", "--", "--port", "4173", "--strictPort"],
+      "port": 4173
+    },
+    {
+      "name": "legacy",
+      "runtimeExecutable": "node",
+      "runtimeArgs": ["-e", "const h=require('http'),f=require('fs'),p=require('path');const root=p.resolve('legacy');h.createServer((q,s)=>{const u=decodeURIComponent(q.url.split('?')[0]);const fp=p.resolve(root,'.'+(u==='/'?'/oc_plaza_demo.html':u));if(!fp.startsWith(root)){s.writeHead(403);s.end();return}f.readFile(fp,(e,d)=>{if(e){s.writeHead(404);s.end();return}s.writeHead(200,{'content-type':fp.endsWith('.html')?'text/html; charset=utf-8':'application/octet-stream'});s.end(d)})}).listen(5174,'127.0.0.1')"],
+      "port": 5174
+    }
+  ]
+}

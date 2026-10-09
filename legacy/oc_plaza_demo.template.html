@@ -1,0 +1,759 @@
+<!doctype html>
+<html lang="zh-Hant">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>OC 巡展廣場 demo</title>
+<style>
+  :root {
+    --ink: #2f2542;
+    --ink-soft: #6b5f80;
+    --panel: rgba(255, 255, 255, 0.78);
+    --panel-line: rgba(47, 37, 66, 0.12);
+    --accent: #ff6f97;
+    --accent-soft: #ffe1ea;
+    --sky: #cfe6ff;
+  }
+  * { box-sizing: border-box; }
+  html, body {
+    margin: 0; height: 100%; overflow: hidden; background: var(--sky);
+    font-family: "Noto Sans TC", "PingFang TC", "Microsoft JhengHei", "Heiti TC", system-ui, sans-serif;
+    color: var(--ink); -webkit-user-select: none; user-select: none;
+    -webkit-tap-highlight-color: transparent;
+  }
+  #stage { position: fixed; inset: 0; touch-action: none; }
+  #stage canvas { display: block; width: 100%; height: 100%; }
+  .panel {
+    background: var(--panel); border: 1px solid var(--panel-line);
+    -webkit-backdrop-filter: blur(10px); backdrop-filter: blur(10px);
+    border-radius: 16px; box-shadow: 0 6px 24px rgba(47, 37, 66, 0.12);
+  }
+  .top {
+    position: fixed; left: max(16px, env(safe-area-inset-left)); right: max(16px, env(safe-area-inset-right));
+    top: max(14px, env(safe-area-inset-top)); display: flex; gap: 10px; align-items: flex-start;
+    justify-content: space-between; pointer-events: none;
+  }
+  .title { padding: 10px 14px; pointer-events: auto; max-width: 420px; }
+  .title h1 { margin: 0; font-size: 17px; letter-spacing: 0.04em; display: flex; align-items: center; gap: 8px; }
+  .chip { font-size: 10px; font-weight: 700; letter-spacing: 0.12em; padding: 2px 7px; border-radius: 999px; background: var(--ink); color: #fff; }
+  .title p { margin: 4px 0 0; font-size: 12px; color: var(--ink-soft); line-height: 1.5; }
+  .actions { display: flex; gap: 8px; pointer-events: auto; flex-wrap: wrap; justify-content: flex-end; }
+  button {
+    font: inherit; font-size: 13px; font-weight: 600; color: var(--ink); cursor: pointer;
+    border: 1px solid var(--panel-line); background: var(--panel); border-radius: 999px; padding: 8px 14px;
+    -webkit-backdrop-filter: blur(10px); backdrop-filter: blur(10px); box-shadow: 0 4px 14px rgba(47, 37, 66, 0.1);
+  }
+  button:hover { background: #fff; }
+  button:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+  .roster {
+    position: fixed; left: 0; right: 0; bottom: max(12px, env(safe-area-inset-bottom));
+    display: flex; gap: 8px; padding: 6px max(16px, env(safe-area-inset-left)); overflow-x: auto;
+    scrollbar-width: none; justify-content: safe center;
+  }
+  .roster::-webkit-scrollbar { display: none; }
+  .who {
+    flex: 0 0 auto; display: flex; align-items: center; gap: 6px; padding: 4px 10px 4px 4px;
+    border-radius: 999px; font-size: 12px; font-weight: 600;
+  }
+  .who img { width: 30px; height: 36px; object-fit: contain; object-position: top; border-radius: 999px; background: #fff; }
+  .who[aria-pressed="true"] { border-color: var(--accent); background: var(--accent-soft); box-shadow: 0 0 0 2px var(--accent) inset; }
+  #loading {
+    position: fixed; inset: 0; display: grid; place-items: center; background: var(--sky);
+    font-size: 15px; color: var(--ink-soft); transition: opacity .6s; z-index: 5;
+  }
+  #loading.hide { opacity: 0; pointer-events: none; }
+  @media (max-width: 640px) {
+    .title p { display: none; }
+    .title h1 { font-size: 15px; }
+    button { padding: 7px 11px; font-size: 12px; }
+  }
+</style>
+</head>
+<body>
+<div id="stage" aria-label="OC 巡展廣場場景"></div>
+<div class="top">
+  <div class="title panel">
+    <h1>OC 巡展廣場 <span class="chip">DEMO</span></h1>
+    <p>點小人選取，點地板讓它走過去；WASD／方向鍵也能走。拖曳轉鏡頭，滾輪或雙指縮放。</p>
+  </div>
+  <div class="actions">
+    <button id="btnHi" type="button">全員打招呼</button>
+    <button id="btnTime" type="button">切換黃昏</button>
+  </div>
+</div>
+<nav class="roster" id="roster" aria-label="角色列表"></nav>
+<div id="loading">場景載入中…</div>
+
+<script type="module">
+import * as THREE from 'https://cdnjs.cloudflare.com/ajax/libs/three.js/0.170.0/three.module.min.js';
+import { WebGLRenderer, Container, Sprite, Texture, Graphics, Text } from 'https://cdnjs.cloudflare.com/ajax/libs/pixi.js/8.13.2/pixi.min.mjs';
+
+const CHARS = /*__CHARS__*/[];
+
+// ---------------------------------------------------------------- basics
+const host = document.getElementById('stage');
+const W = () => host.clientWidth, H = () => host.clientHeight;
+const DPR = Math.min(window.devicePixelRatio || 1, 2);
+const rand = (a, b) => a + Math.random() * (b - a);
+const pick = (arr) => arr[(Math.random() * arr.length) | 0];
+const clamp = (v, a, b) => Math.max(a, Math.min(b, v));
+const lerp = (a, b, t) => a + (b - a) * t;
+const damp = (a, b, k, dt) => lerp(a, b, 1 - Math.exp(-k * dt));
+
+const WALK_R = 7.5, FOUNTAIN_R = 2.35, CHAR_H = 1.95;
+
+// ---------------------------------------------------------------- renderers (Three.js + PixiJS share one WebGL context)
+const three = new THREE.WebGLRenderer({ antialias: true, stencil: true });
+three.setPixelRatio(DPR);
+three.setSize(W(), H());
+three.shadowMap.enabled = true;
+three.shadowMap.type = THREE.PCFSoftShadowMap;
+three.toneMapping = THREE.ACESFilmicToneMapping;
+three.toneMappingExposure = 1.02;
+host.appendChild(three.domElement);
+
+const pixi = new WebGLRenderer();
+await pixi.init({
+  context: three.getContext(), width: W(), height: H(), resolution: DPR,
+  clearBeforeRender: false, antialias: true,
+});
+const stage2d = new Container();
+const charLayer = new Container();
+charLayer.sortableChildren = true;
+stage2d.addChild(charLayer);
+
+// ---------------------------------------------------------------- scene
+const scene = new THREE.Scene();
+const camera = new THREE.PerspectiveCamera(34, W() / H(), 0.1, 400);
+
+const DAY = {
+  top: new THREE.Color('#7fbaf5'), mid: new THREE.Color('#ffeef4'), bottom: new THREE.Color('#d6e9ff'),
+  fog: new THREE.Color('#e8f1ff'), hemiSky: new THREE.Color('#fff4e6'), hemiGround: new THREE.Color('#86b88f'),
+  hemi: 1.15, sun: new THREE.Color('#fff1dc'), sunI: 2.3, sunPos: new THREE.Vector3(-9, 15, 7), lamp: 0.25,
+};
+const DUSK = {
+  top: new THREE.Color('#5b5fc7'), mid: new THREE.Color('#ffb48f'), bottom: new THREE.Color('#ffd7c2'),
+  fog: new THREE.Color('#f3c3b6'), hemiSky: new THREE.Color('#ffc9a6'), hemiGround: new THREE.Color('#6a5a8c'),
+  hemi: 0.75, sun: new THREE.Color('#ff9a6a'), sunI: 1.6, sunPos: new THREE.Vector3(-14, 6, 4), lamp: 2.4,
+};
+const env = {
+  top: DAY.top.clone(), mid: DAY.mid.clone(), bottom: DAY.bottom.clone(), fog: DAY.fog.clone(),
+  hemiSky: DAY.hemiSky.clone(), hemiGround: DAY.hemiGround.clone(), hemi: DAY.hemi,
+  sun: DAY.sun.clone(), sunI: DAY.sunI, sunPos: DAY.sunPos.clone(), lamp: DAY.lamp,
+};
+let envTarget = DAY;
+
+scene.fog = new THREE.Fog(env.fog, 38, 95);
+
+const skyMat = new THREE.ShaderMaterial({
+  side: THREE.BackSide, depthWrite: false, fog: false,
+  uniforms: { top: { value: env.top }, mid: { value: env.mid }, bottom: { value: env.bottom } },
+  vertexShader: `varying vec3 vP; void main(){ vP = normalize(position); gl_Position = projectionMatrix * modelViewMatrix * vec4(position,1.0); }`,
+  fragmentShader: `uniform vec3 top; uniform vec3 mid; uniform vec3 bottom; varying vec3 vP;
+    void main(){ float h = vP.y; vec3 c = h > 0.0 ? mix(mid, top, pow(clamp(h,0.0,1.0), 0.55)) : mix(mid, bottom, pow(clamp(-h,0.0,1.0), 0.45));
+    gl_FragColor = vec4(c, 1.0); }`,
+});
+const sky = new THREE.Mesh(new THREE.SphereGeometry(200, 32, 16), skyMat);
+scene.add(sky);
+
+const hemi = new THREE.HemisphereLight(env.hemiSky, env.hemiGround, env.hemi);
+scene.add(hemi);
+const sun = new THREE.DirectionalLight(env.sun, env.sunI);
+sun.position.copy(env.sunPos);
+sun.castShadow = true;
+sun.shadow.mapSize.set(2048, 2048);
+Object.assign(sun.shadow.camera, { left: -17, right: 17, top: 17, bottom: -17, near: 1, far: 50 });
+sun.shadow.bias = -0.0008;
+sun.shadow.normalBias = 0.02;
+scene.add(sun);
+
+// toon helpers
+const gradTex = new THREE.DataTexture(new Uint8Array([90, 170, 255]), 3, 1, THREE.RedFormat);
+gradTex.minFilter = gradTex.magFilter = THREE.NearestFilter;
+gradTex.needsUpdate = true;
+const toon = (color, extra = {}) => new THREE.MeshToonMaterial({ color, gradientMap: gradTex, ...extra });
+const OUTLINE = new THREE.MeshBasicMaterial({ color: 0x3b2e52, side: THREE.BackSide });
+function withOutline(mesh, t = 0.05) {
+  const o = new THREE.Mesh(mesh.geometry, OUTLINE);
+  o.scale.setScalar(1 + t);
+  mesh.add(o);
+  return mesh;
+}
+function prop(geo, mat, x, y, z, outline = 0.05) {
+  const m = new THREE.Mesh(geo, mat);
+  m.position.set(x, y, z);
+  m.castShadow = true; m.receiveShadow = true;
+  if (outline) withOutline(m, outline);
+  scene.add(m);
+  return m;
+}
+
+function canvasTex(w, h, draw) {
+  const c = document.createElement('canvas');
+  c.width = w; c.height = h;
+  draw(c.getContext('2d'), w, h);
+  const t = new THREE.CanvasTexture(c);
+  t.colorSpace = THREE.SRGBColorSpace;
+  t.anisotropy = 8;
+  return t;
+}
+
+// floating island
+const island = new THREE.Group();
+scene.add(island);
+const grass = new THREE.Mesh(new THREE.CylinderGeometry(15.5, 14.2, 1.1, 72), toon('#9fd48d'));
+grass.position.y = -0.56; grass.receiveShadow = true; island.add(grass);
+const rim = new THREE.Mesh(new THREE.CylinderGeometry(14.25, 12.8, 1.3, 72), toon('#d9a979'));
+rim.position.y = -1.75; island.add(rim);
+const under = new THREE.Mesh(new THREE.ConeGeometry(12.8, 9, 18, 1), toon('#b98a62'));
+under.rotation.x = Math.PI; under.position.y = -6.9; island.add(under);
+const rocks = new THREE.Group(); scene.add(rocks);
+for (let i = 0; i < 9; i++) {
+  const a = (i / 9) * Math.PI * 2 + rand(-0.2, 0.2);
+  const r = new THREE.Mesh(new THREE.DodecahedronGeometry(rand(0.7, 1.5), 0), toon('#a77c58'));
+  r.position.set(Math.cos(a) * rand(7, 10), rand(-6.5, -3.5), Math.sin(a) * rand(7, 10));
+  r.rotation.set(rand(0, 3), rand(0, 3), 0);
+  rocks.add(r);
+}
+
+// plaza floor (radial tiles drawn on a canvas)
+const plazaTex = canvasTex(1024, 1024, (g, w, h) => {
+  const cx = w / 2, cy = h / 2;
+  g.fillStyle = '#f6ead8'; g.fillRect(0, 0, w, h);
+  const rings = 9;
+  for (let r = 0; r < rings; r++) {
+    const r0 = (r / rings) * (w / 2), r1 = ((r + 1) / rings) * (w / 2);
+    const segs = 10 + r * 6;
+    for (let s = 0; s < segs; s++) {
+      const a0 = (s / segs) * Math.PI * 2, a1 = ((s + 1) / segs) * Math.PI * 2;
+      g.beginPath(); g.arc(cx, cy, r1 - 3, a0 + 0.01, a1 - 0.01); g.arc(cx, cy, r0 + 3, a1 - 0.01, a0 + 0.01, true); g.closePath();
+      const tone = (r + s) % 3;
+      g.fillStyle = r === rings - 1 ? '#f2c6cf' : tone === 0 ? '#fbf3e6' : tone === 1 ? '#f4e4cf' : '#efdcc4';
+      g.fill();
+    }
+  }
+  g.strokeStyle = 'rgba(160,120,90,0.35)'; g.lineWidth = 6;
+  g.beginPath(); g.arc(cx, cy, w / 2 - 6, 0, Math.PI * 2); g.stroke();
+  g.fillStyle = 'rgba(255,111,151,0.18)';
+  for (let k = 0; k < 8; k++) {
+    const a = (k / 8) * Math.PI * 2;
+    g.beginPath(); g.arc(cx + Math.cos(a) * w * 0.33, cy + Math.sin(a) * h * 0.33, 14, 0, Math.PI * 2); g.fill();
+  }
+});
+const plaza = new THREE.Mesh(new THREE.CircleGeometry(9.2, 96), new THREE.MeshToonMaterial({ map: plazaTex, gradientMap: gradTex }));
+plaza.rotation.x = -Math.PI / 2; plaza.position.y = 0.012; plaza.receiveShadow = true;
+scene.add(plaza);
+const border = new THREE.Mesh(new THREE.TorusGeometry(9.25, 0.12, 8, 96), toon('#f4b860'));
+border.rotation.x = Math.PI / 2; border.position.y = 0.05; scene.add(border);
+
+// fountain (kept low so the 2D characters never need to hide behind it)
+prop(new THREE.CylinderGeometry(1.75, 1.95, 0.42, 40), toon('#fff8f0'), 0, 0.21, 0, 0.03);
+const water = new THREE.Mesh(new THREE.CircleGeometry(1.52, 40), new THREE.MeshToonMaterial({ color: '#8fd3ff', gradientMap: gradTex, emissive: '#2a6fa8', emissiveIntensity: 0.15 }));
+water.rotation.x = -Math.PI / 2; water.position.y = 0.425; scene.add(water);
+prop(new THREE.CylinderGeometry(0.32, 0.42, 0.55, 20), toon('#fff8f0'), 0, 0.62, 0, 0.06);
+const droplets = [];
+for (let i = 0; i < 16; i++) {
+  const d = new THREE.Mesh(new THREE.SphereGeometry(0.07, 8, 6), new THREE.MeshBasicMaterial({ color: '#cdeeff' }));
+  d.userData = { a: (i / 16) * Math.PI * 2, t: Math.random() };
+  scene.add(d); droplets.push(d);
+}
+
+// back gallery: arches, banners, sign — all outside the walkable circle
+const ARCH_COLORS = ['#ffd3e0', '#d9ecff', '#fff1c7', '#dff5df', '#e9ddff'];
+const BANNERS = ['委託', '巡展', 'OC', '作業', '完成'];
+for (let i = 0; i < 5; i++) {
+  const a = Math.PI * (1.18 + i * 0.16);
+  const x = Math.cos(a) * 11.2, z = Math.sin(a) * 11.2;
+  const g = new THREE.Group();
+  g.position.set(x, 0, z); g.lookAt(0, 0, 0);
+  scene.add(g);
+  const mat = toon(ARCH_COLORS[i]);
+  for (const s of [-1, 1]) {
+    const p = new THREE.Mesh(new THREE.BoxGeometry(0.42, 3.4, 0.42), mat);
+    p.position.set(s * 1.15, 1.7, 0); p.castShadow = true; withOutline(p, 0.06); g.add(p);
+  }
+  const arch = new THREE.Mesh(new THREE.TorusGeometry(1.15, 0.21, 10, 24, Math.PI), mat);
+  arch.position.set(0, 3.4, 0); arch.castShadow = true; withOutline(arch, 0.07); g.add(arch);
+  const tex = canvasTex(256, 384, (c, w, h) => {
+    c.fillStyle = ['#ff8fae', '#7fb6ff', '#ffc85c', '#7fd48f', '#b49bff'][i]; c.fillRect(0, 0, w, h);
+    c.fillStyle = 'rgba(255,255,255,0.25)'; c.fillRect(0, 0, w, 36);
+    c.beginPath(); c.moveTo(0, h); c.lineTo(w / 2, h - 50); c.lineTo(w, h); c.fillStyle = '#ffffff'; c.fill();
+    c.fillStyle = '#fff'; c.font = `bold ${BANNERS[i].length > 2 ? 64 : 92}px "Noto Sans TC","Microsoft JhengHei","PingFang TC",sans-serif`;
+    c.textAlign = 'center'; c.textBaseline = 'middle'; c.fillText(BANNERS[i], w / 2, h * 0.46);
+  });
+  const banner = new THREE.Mesh(new THREE.PlaneGeometry(1.25, 1.85), new THREE.MeshToonMaterial({ map: tex, gradientMap: gradTex, side: THREE.DoubleSide }));
+  banner.position.set(0, 2.15, 0.05); g.add(banner);
+  const ped = new THREE.Mesh(new THREE.CylinderGeometry(0.55, 0.65, 0.7, 20), toon('#fffaf2'));
+  ped.position.set(0, 0.35, 1.6); ped.castShadow = true; withOutline(ped, 0.05); g.add(ped);
+  const gem = new THREE.Mesh(i % 2 ? new THREE.OctahedronGeometry(0.32) : new THREE.IcosahedronGeometry(0.3, 0),
+    new THREE.MeshToonMaterial({ color: ['#ff8fae', '#7fb6ff', '#ffc85c', '#7fd48f', '#b49bff'][i], gradientMap: gradTex, emissive: '#ffffff', emissiveIntensity: 0.15 }));
+  gem.position.set(0, 1.25, 1.6); gem.castShadow = true; withOutline(gem, 0.08); g.add(gem);
+  gem.userData.spin = rand(0.6, 1.1); gem.userData.base = 1.25;
+  droplets.push(gem);
+}
+const signTex = canvasTex(1024, 256, (c, w, h) => {
+  c.fillStyle = '#ffffff'; c.beginPath(); c.roundRect(8, 8, w - 16, h - 16, 60); c.fill();
+  c.lineWidth = 10; c.strokeStyle = '#3b2e52'; c.stroke();
+  c.fillStyle = '#ff6f97'; c.beginPath(); c.roundRect(34, 34, w - 68, h - 68, 44); c.fill();
+  c.fillStyle = '#fff'; c.font = 'bold 112px "Noto Sans TC","Microsoft JhengHei","PingFang TC",sans-serif';
+  c.textAlign = 'center'; c.textBaseline = 'middle'; c.fillText('OC 巡展廣場', w / 2, h / 2 + 6);
+});
+const sign = new THREE.Mesh(new THREE.PlaneGeometry(6.4, 1.6), new THREE.MeshBasicMaterial({ map: signTex, transparent: true }));
+sign.position.set(0, 4.75, -12.2); scene.add(sign);
+for (const s of [-1, 1]) prop(new THREE.CylinderGeometry(0.12, 0.12, 4.4, 10), toon('#3b2e52'), s * 2.9, 2.2, -12.25, 0);
+
+// lamps + bunting around the back half
+const lampMats = [];
+const lampPts = [];
+for (let i = 0; i <= 8; i++) {
+  const a = Math.PI * (1.02 + i * 0.12);
+  const x = Math.cos(a) * 9.9, z = Math.sin(a) * 9.9;
+  prop(new THREE.CylinderGeometry(0.08, 0.11, 2.6, 8), toon('#4a3d63'), x, 1.3, z, 0);
+  const bm = new THREE.MeshToonMaterial({ color: '#fff3c4', gradientMap: gradTex, emissive: '#ffcf6b', emissiveIntensity: env.lamp });
+  lampMats.push(bm);
+  const bulb = new THREE.Mesh(new THREE.SphereGeometry(0.22, 14, 10), bm);
+  bulb.position.set(x, 2.72, z); withOutline(bulb, 0.08); scene.add(bulb);
+  lampPts.push(new THREE.Vector3(x, 2.45, z));
+}
+const flagCols = ['#ff8fae', '#7fb6ff', '#ffc85c', '#7fd48f', '#b49bff'];
+for (let i = 0; i < lampPts.length - 1; i++) {
+  const a = lampPts[i], b = lampPts[i + 1];
+  const n = 7;
+  for (let k = 1; k < n; k++) {
+    const t = k / n;
+    const p = a.clone().lerp(b, t); p.y -= Math.sin(t * Math.PI) * 0.45;
+    const f = new THREE.Mesh(new THREE.ConeGeometry(0.13, 0.32, 3), new THREE.MeshToonMaterial({ color: flagCols[(i + k) % 5], gradientMap: gradTex }));
+    f.position.copy(p); f.position.y -= 0.16; f.rotation.x = Math.PI;
+    scene.add(f);
+  }
+}
+
+// trees (low-poly) on the back / sides
+function tree(x, z, s = 1) {
+  const g = new THREE.Group(); g.position.set(x, 0, z); g.scale.setScalar(s); scene.add(g);
+  const trunk = new THREE.Mesh(new THREE.CylinderGeometry(0.18, 0.26, 1.3, 8), toon('#9a6b4a'));
+  trunk.position.y = 0.65; trunk.castShadow = true; withOutline(trunk, 0.08); g.add(trunk);
+  const cols = ['#7cc77a', '#93d68a', '#6fb873'];
+  [[0, 1.9, 0, 1.0], [0.45, 1.55, 0.2, 0.7], [-0.4, 1.6, -0.1, 0.72], [0, 2.55, 0, 0.62]].forEach(([dx, dy, dz, r], k) => {
+    const b = new THREE.Mesh(new THREE.IcosahedronGeometry(r, 1), toon(cols[k % 3]));
+    b.position.set(dx, dy, dz); b.castShadow = true; withOutline(b, 0.05); g.add(b);
+  });
+  return g;
+}
+[[-13.2, -6.5, 1.25], [13.2, -6.5, 1.2], [-10.5, -11.5, 1.1], [10.5, -11.5, 1.15], [-14.2, -1.5, 1.0], [14.2, -1.8, 0.95], [-6.2, -13.4, 0.95], [6.4, -13.4, 1.0]]
+  .forEach(([x, z, s]) => tree(x, z, s));
+// flower patches: flat, near the plaza border
+for (let i = 0; i < 70; i++) {
+  const a = rand(0, Math.PI * 2), r = rand(9.8, 14.6);
+  const f = new THREE.Mesh(new THREE.SphereGeometry(rand(0.09, 0.15), 6, 5), new THREE.MeshToonMaterial({ color: pick(['#ffffff', '#ffd1e0', '#fff1a8', '#d7c6ff']), gradientMap: gradTex }));
+  f.position.set(Math.cos(a) * r, 0.08, Math.sin(a) * r); scene.add(f);
+}
+// clouds below / around the island
+const clouds = [];
+const cloudMat = new THREE.MeshToonMaterial({ color: '#ffffff', gradientMap: gradTex, transparent: true, opacity: 0.92 });
+for (let i = 0; i < 12; i++) {
+  const g = new THREE.Group();
+  for (let k = 0; k < 5; k++) {
+    const b = new THREE.Mesh(new THREE.SphereGeometry(rand(1.2, 2.4), 12, 10), cloudMat);
+    b.position.set(k * 1.6 - 3.2, rand(-0.4, 0.5), rand(-0.8, 0.8)); g.add(b);
+  }
+  const a = rand(0, Math.PI * 2), r = rand(24, 46);
+  g.position.set(Math.cos(a) * r, rand(-14, 6), Math.sin(a) * r);
+  g.userData.speed = rand(0.15, 0.4);
+  scene.add(g); clouds.push(g);
+}
+
+// ---------------------------------------------------------------- floor helpers (shadows, selection ring, click marker)
+const shadowTex = canvasTex(128, 128, (c, w, h) => {
+  const gr = c.createRadialGradient(w / 2, h / 2, 2, w / 2, h / 2, w / 2);
+  gr.addColorStop(0, 'rgba(40,25,60,0.55)'); gr.addColorStop(0.6, 'rgba(40,25,60,0.25)'); gr.addColorStop(1, 'rgba(40,25,60,0)');
+  c.fillStyle = gr; c.fillRect(0, 0, w, h);
+});
+const shadowGeo = new THREE.PlaneGeometry(1.3, 0.62);
+const ringGeo = new THREE.RingGeometry(0.62, 0.78, 48);
+const selRing = new THREE.Mesh(ringGeo, new THREE.MeshBasicMaterial({ color: '#ff6f97', transparent: true, opacity: 0.9, depthWrite: false }));
+selRing.rotation.x = -Math.PI / 2; selRing.position.y = 0.03; selRing.scale.set(1, 0.6 / 0.78 * 0.78 * 1.0, 1);
+scene.add(selRing);
+const marker = new THREE.Mesh(new THREE.RingGeometry(0.2, 0.32, 32), new THREE.MeshBasicMaterial({ color: '#ffffff', transparent: true, opacity: 0, depthWrite: false }));
+marker.rotation.x = -Math.PI / 2; marker.position.y = 0.035; scene.add(marker);
+let markerT = 1;
+
+// ---------------------------------------------------------------- characters (2D sprites drawn by PixiJS)
+const LINES = ['委託完成！', '今天的作業拆成三段了', '先做 10 分鐘就好', '一起去看展品？', '畫圖時間！', '要組隊交作業嗎？',
+  '好睏…', '♪', '解鎖新造型了！', '這週的委託好多', '休息一下', '展台上那個是什麼？'];
+const HELLO = ['嗨～', '你好！', '一起逛？', '午安～', '又見面了！'];
+const POKED = ['在！', '要去哪？', '被點到了', '♪', '嘿嘿', '收到！'];
+const INK = 0x3b2e52;
+
+const tmpV = new THREE.Vector3(), tmpV2 = new THREE.Vector3();
+function toScreen(p, out) {
+  tmpV.copy(p).project(camera);
+  out.x = (tmpV.x * 0.5 + 0.5) * W();
+  out.y = (-tmpV.y * 0.5 + 0.5) * H();
+  return out;
+}
+
+class Chibi {
+  constructor(def, tex, idx) {
+    this.def = def; this.idx = idx;
+    const a = (idx / CHARS.length) * Math.PI * 2 + rand(-0.2, 0.2), r = rand(3.4, 6.6);
+    this.pos = new THREE.Vector3(Math.cos(a) * r, 0, Math.sin(a) * r);
+    this.vel = new THREE.Vector3();
+    this.target = null; this.state = 'idle'; this.timer = rand(0.5, 3); this.cool = rand(2, 6);
+    this.phase = rand(0, 6); this.seed = rand(0, 100); this.face = Math.random() < 0.5 ? -1 : 1; this.flip = this.face;
+    this.speed = rand(1.25, 1.55); this.hopT = -1; this.manual = false;
+    this.view = new Container();
+    this.sprite = new Sprite(tex);
+    this.sprite.anchor.set(0.5, 0.985);
+    this.view.addChild(this.sprite);
+    this.label = new Text({ text: def.name, style: { fontFamily: 'Noto Sans TC, Microsoft JhengHei, PingFang TC, sans-serif', fontSize: 13, fontWeight: '700', fill: '#ffffff', stroke: { color: '#3b2e52', width: 4, join: 'round' } } });
+    this.label.anchor.set(0.5, 1);
+    this.view.addChild(this.label);
+    this.bubble = null; this.bubbleT = 0;
+    charLayer.addChild(this.view);
+    this.shadow = new THREE.Mesh(shadowGeo, new THREE.MeshBasicMaterial({ map: shadowTex, transparent: true, depthWrite: false }));
+    this.shadow.rotation.x = -Math.PI / 2; this.shadow.position.y = 0.025;
+    scene.add(this.shadow);
+    this.scr = { x: 0, y: 0, h: 0, w: 0 };
+  }
+  say(text, dur = 2.6) {
+    if (this.bubble) this.view.removeChild(this.bubble);
+    const b = new Container();
+    const t = new Text({ text, style: { fontFamily: 'Noto Sans TC, Microsoft JhengHei, PingFang TC, sans-serif', fontSize: 14, fontWeight: '700', fill: '#3b2e52' } });
+    const pw = t.width + 22, ph = t.height + 12;
+    const g = new Graphics();
+    g.roundRect(-pw / 2, -ph - 9, pw, ph, 12).fill(0xffffff).stroke({ width: 2, color: INK });
+    g.poly([-7, -10.5, 7, -10.5, 0, 0]).fill(0xffffff);
+    g.moveTo(-7, -9).lineTo(0, 0).lineTo(7, -9).stroke({ width: 2, color: INK });
+    t.anchor.set(0.5, 0.5); t.position.set(0, -ph / 2 - 9);
+    b.addChild(g, t);
+    b.scale.set(0.2);
+    this.bubble = b; this.bubbleT = dur;
+    this.view.addChild(b);
+  }
+  hop() { this.hopT = 0; }
+  goTo(x, z) { this.target = new THREE.Vector3(x, 0, z); this.state = 'walk'; }
+  update(dt, t, all) {
+    // --- decide
+    if (!this.manual) {
+      if (this.state === 'idle') {
+        this.timer -= dt;
+        if (this.timer <= 0) { const p = randomSpot(this.pos); this.goTo(p.x, p.z); }
+      }
+      this.cool -= dt;
+    }
+    // --- steer
+    let moving = false;
+    if (keyDir.lengthSq() > 0 && this === selected) {
+      this.target = null; this.state = 'walk';
+      this.vel.lerp(tmpV2.copy(keyDir).multiplyScalar(this.speed * 1.1), 1 - Math.exp(-10 * dt));
+      moving = true;
+    } else if (this.state === 'walk' && this.target) {
+      const d = tmpV2.copy(this.target).sub(this.pos); d.y = 0;
+      const dist = d.length();
+      if (dist < 0.12) { this.state = 'idle'; this.target = null; this.timer = rand(1.4, 4.6); this.vel.set(0, 0, 0); if (!this.manual && Math.random() < 0.28) this.say(pick(LINES)); }
+      else {
+        d.multiplyScalar(1 / dist);
+        // avoid the fountain
+        const fc = Math.hypot(this.pos.x, this.pos.z);
+        if (fc < FOUNTAIN_R + 1.1) { const k = (FOUNTAIN_R + 1.1 - fc) * 1.6; d.x += (this.pos.x / (fc || 1)) * k; d.z += (this.pos.z / (fc || 1)) * k; }
+        d.normalize().multiplyScalar(this.speed * Math.min(1, dist / 0.5 + 0.35));
+        this.vel.lerp(d, 1 - Math.exp(-8 * dt));
+        moving = true;
+      }
+    } else {
+      this.vel.multiplyScalar(Math.exp(-10 * dt));
+    }
+    // separation from others
+    for (const o of all) {
+      if (o === this) continue;
+      const dx = this.pos.x - o.pos.x, dz = this.pos.z - o.pos.z, dd = Math.hypot(dx, dz);
+      if (dd > 0.001 && dd < 0.85) { const k = (0.85 - dd) * 3.2 * dt; this.pos.x += (dx / dd) * k; this.pos.z += (dz / dd) * k; }
+      // friendly hello
+      if (!this.manual && !o.manual && dd < 1.4 && this.cool <= 0 && o.cool <= 0 && this.state !== 'talk' && o.state !== 'talk') {
+        for (const [c, other] of [[this, o], [o, this]]) {
+          c.state = 'talk'; c.target = null; c.timer = 2.4; c.cool = rand(9, 16); c.vel.set(0, 0, 0);
+          c.face = Math.sign(toScreen(other.pos, { x: 0, y: 0 }).x - toScreen(c.pos, { x: 0, y: 0 }).x) || c.face;
+        }
+        this.say(pick(HELLO)); setTimeout(() => o.say(pick(HELLO)), 450);
+      }
+    }
+    if (this.state === 'talk') { this.timer -= dt; if (this.timer <= 0) { this.state = 'idle'; this.timer = rand(0.5, 2); } }
+    this.pos.addScaledVector(this.vel, dt);
+    // keep on the plaza, outside the fountain
+    const r = Math.hypot(this.pos.x, this.pos.z);
+    if (r > WALK_R) { this.pos.x *= WALK_R / r; this.pos.z *= WALK_R / r; if (this.target) { this.state = 'idle'; this.target = null; this.timer = rand(0.5, 2); } }
+    if (r < FOUNTAIN_R && r > 0.001) { this.pos.x *= FOUNTAIN_R / r; this.pos.z *= FOUNTAIN_R / r; }
+    const spd = Math.hypot(this.vel.x, this.vel.z);
+    moving = moving && spd > 0.15;
+
+    // --- project to screen
+    const foot = toScreen(this.pos, { x: 0, y: 0 });
+    const head = toScreen(tmpV2.set(this.pos.x, CHAR_H, this.pos.z), { x: 0, y: 0 });
+    const pxH = Math.max(8, foot.y - head.y);
+    const base = pxH / this.sprite.texture.height;
+    const pxPerUnit = pxH / CHAR_H;
+    if (spd > 0.2) {
+      const ahead = toScreen(tmpV2.set(this.pos.x + this.vel.x * 0.2, 0, this.pos.z + this.vel.z * 0.2), { x: 0, y: 0 });
+      const dx = ahead.x - foot.x;
+      if (Math.abs(dx) > 0.6) this.face = dx > 0 ? 1 : -1;
+    }
+    this.flip = damp(this.flip, this.face, 14, dt);
+
+    // --- animate (no rig: bounce, squash & stretch, waddle)
+    let lift = 0, sx = 1, sy = 1, rot = 0;
+    if (moving) {
+      this.phase += dt * 10.5 * (spd / 1.35);
+      const b = Math.abs(Math.sin(this.phase));
+      lift = b * 0.11 * pxPerUnit;
+      const c = 1 - b;
+      sx = 1 + 0.05 * c; sy = 1 - 0.06 * c;
+      rot = Math.sin(this.phase) * 0.055;
+    } else {
+      const br = Math.sin(t * 2.3 + this.seed);
+      sy = 1 + 0.014 * br; sx = 1 - 0.006 * br;
+      rot = Math.sin(t * 0.9 + this.seed) * 0.012;
+    }
+    if (this.hopT >= 0) {
+      this.hopT += dt;
+      const T = 0.5, u = this.hopT / T;
+      if (u >= 1) this.hopT = -1;
+      else {
+        lift += Math.sin(u * Math.PI) * 0.55 * pxPerUnit;
+        const sq = u < 0.12 ? (1 - u / 0.12) : u > 0.88 ? (u - 0.88) / 0.12 : 0;
+        sx *= 1 + 0.12 * sq - (u > 0.12 && u < 0.88 ? 0.04 : 0);
+        sy *= 1 - 0.14 * sq + (u > 0.12 && u < 0.88 ? 0.06 : 0);
+      }
+    }
+    this.view.position.set(foot.x, foot.y);
+    this.sprite.position.set(0, -lift);
+    this.sprite.scale.set(base * sx * this.flip, base * sy);
+    this.sprite.rotation = rot;
+    this.label.position.set(0, -pxH - lift - 4);
+    this.label.alpha = this === selected ? 1 : 0.82;
+    this.label.scale.set(clamp(pxH / 150, 0.75, 1.15));
+    if (this.bubble) {
+      this.bubbleT -= dt;
+      const k = clamp(pxH / 150, 0.8, 1.2);
+      const pop = Math.min(1, (2.6 - this.bubbleT) * 7);
+      const s = (this.bubbleT < 0.25 ? Math.max(0, this.bubbleT / 0.25) : 1) * (0.6 + 0.4 * pop) * k;
+      this.bubble.scale.set(s); this.bubble.alpha = Math.min(1, this.bubbleT * 4);
+      this.bubble.position.set(0, -pxH - lift - 22 * k);
+      if (this.bubbleT <= 0) { this.view.removeChild(this.bubble); this.bubble = null; }
+    }
+    // depth sort: nearer to camera on top
+    tmpV.copy(this.pos).applyMatrix4(camera.matrixWorldInverse);
+    this.view.zIndex = Math.round(tmpV.z * 100);
+    // floor shadow
+    const lh = lift / pxPerUnit;
+    this.shadow.position.set(this.pos.x, 0.025, this.pos.z);
+    const ss = 1 - Math.min(0.45, lh * 0.5);
+    this.shadow.scale.set(ss, ss, 1);
+    this.shadow.material.opacity = 1 - Math.min(0.5, lh * 0.6);
+    this.scr = { x: foot.x, y: foot.y - lift, h: pxH, w: this.sprite.texture.width * base };
+  }
+  hit(x, y) {
+    const s = this.scr;
+    return x > s.x - s.w * 0.42 && x < s.x + s.w * 0.42 && y < s.y && y > s.y - s.h * 0.98;
+  }
+}
+
+function randomSpot(from) {
+  for (let i = 0; i < 30; i++) {
+    const a = rand(0, Math.PI * 2), r = Math.sqrt(rand((FOUNTAIN_R + 0.6) ** 2, (WALK_R - 0.3) ** 2));
+    const p = new THREE.Vector3(Math.cos(a) * r, 0, Math.sin(a) * r);
+    if (p.distanceTo(from) > 2.2) return p;
+  }
+  return new THREE.Vector3(rand(-5, 5), 0, rand(3, 6));
+}
+
+// ---------------------------------------------------------------- load sprites
+async function loadTex(src) {
+  const img = new Image();
+  img.src = src;
+  await img.decode();
+  return Texture.from(img);
+}
+const chibis = [];
+for (let i = 0; i < CHARS.length; i++) chibis.push(new Chibi(CHARS[i], await loadTex(CHARS[i].src), i));
+let selected = chibis[0];
+
+// roster
+const roster = document.getElementById('roster');
+const rosterBtns = chibis.map((c) => {
+  const b = document.createElement('button');
+  b.type = 'button'; b.className = 'who'; b.setAttribute('aria-pressed', 'false');
+  b.innerHTML = `<img alt="" src="${c.def.src}"><span>${c.def.name}</span>`;
+  b.addEventListener('click', () => select(c, true));
+  roster.appendChild(b);
+  return b;
+});
+function select(c, poke = false) {
+  selected = c;
+  chibis.forEach((o, i) => { o.manual = o === c && o.manual; rosterBtns[i].setAttribute('aria-pressed', String(o === c)); });
+  if (poke) { c.hop(); c.say(pick(POKED)); }
+}
+select(selected);
+
+// ---------------------------------------------------------------- camera rig & input
+const cam = { yaw: -0.42, pitch: 0.62, dist: 27, tx: 0, tz: 0.6, yawT: 0, pitchT: 0.52, distT: 19 };
+function frameCamera() {
+  const portrait = W() / H() < 0.9;
+  camera.fov = portrait ? 46 : 34;
+  cam.minD = portrait ? 17 : 13; cam.maxD = portrait ? 34 : 28;
+  if (!frameCamera.done) { cam.distT = portrait ? 25 : 19; frameCamera.done = true; }
+  camera.aspect = W() / H(); camera.updateProjectionMatrix();
+}
+frameCamera();
+
+const keys = new Set();
+const keyDir = new THREE.Vector3();
+addEventListener('keydown', (e) => {
+  const k = e.key.toLowerCase();
+  if (['w', 'a', 's', 'd', 'arrowup', 'arrowdown', 'arrowleft', 'arrowright'].includes(k)) { keys.add(k); e.preventDefault(); }
+});
+addEventListener('keyup', (e) => keys.delete(e.key.toLowerCase()));
+function updateKeys() {
+  let f = 0, s = 0;
+  if (keys.has('w') || keys.has('arrowup')) f += 1;
+  if (keys.has('s') || keys.has('arrowdown')) f -= 1;
+  if (keys.has('d') || keys.has('arrowright')) s += 1;
+  if (keys.has('a') || keys.has('arrowleft')) s -= 1;
+  keyDir.set(0, 0, 0);
+  if (f || s) {
+    const fwd = new THREE.Vector3(-Math.sin(cam.yaw), 0, -Math.cos(cam.yaw));
+    const right = new THREE.Vector3(Math.cos(cam.yaw), 0, -Math.sin(cam.yaw));
+    keyDir.addScaledVector(fwd, f).addScaledVector(right, s).normalize();
+    if (selected) selected.manual = true;
+  }
+}
+
+const ray = new THREE.Raycaster();
+const floorPlane = new THREE.Plane(new THREE.Vector3(0, 1, 0), 0);
+const pointers = new Map();
+let drag = null, pinch0 = 0;
+host.addEventListener('pointerdown', (e) => {
+  host.setPointerCapture(e.pointerId);
+  pointers.set(e.pointerId, { x: e.clientX, y: e.clientY });
+  if (pointers.size === 1) drag = { x: e.clientX, y: e.clientY, sx: e.clientX, sy: e.clientY, moved: false };
+  if (pointers.size === 2) { const [a, b] = [...pointers.values()]; pinch0 = Math.hypot(a.x - b.x, a.y - b.y); drag = null; }
+});
+host.addEventListener('pointermove', (e) => {
+  if (!pointers.has(e.pointerId)) return;
+  pointers.set(e.pointerId, { x: e.clientX, y: e.clientY });
+  if (pointers.size === 2) {
+    const [a, b] = [...pointers.values()];
+    const d = Math.hypot(a.x - b.x, a.y - b.y);
+    if (pinch0) cam.distT = clamp(cam.distT * pinch0 / d, cam.minD, cam.maxD);
+    pinch0 = d; return;
+  }
+  if (!drag) return;
+  const dx = e.clientX - drag.x, dy = e.clientY - drag.y;
+  if (Math.hypot(e.clientX - drag.sx, e.clientY - drag.sy) > 6) drag.moved = true;
+  if (drag.moved) {
+    cam.yawT = clamp(cam.yawT - dx * 0.004, -0.5, 0.5);
+    cam.pitchT = clamp(cam.pitchT + dy * 0.003, 0.42, 0.95);
+  }
+  drag.x = e.clientX; drag.y = e.clientY;
+});
+const endPointer = (e) => {
+  const wasTap = drag && !drag.moved && pointers.size === 1;
+  pointers.delete(e.pointerId);
+  if (pointers.size < 2) pinch0 = 0;
+  if (wasTap) tap(e.clientX - host.getBoundingClientRect().left, e.clientY - host.getBoundingClientRect().top);
+  if (pointers.size === 0) drag = null;
+};
+host.addEventListener('pointerup', endPointer);
+host.addEventListener('pointercancel', (e) => { pointers.delete(e.pointerId); drag = null; pinch0 = 0; });
+host.addEventListener('wheel', (e) => { e.preventDefault(); cam.distT = clamp(cam.distT * (1 + Math.sign(e.deltaY) * 0.08), cam.minD, cam.maxD); }, { passive: false });
+
+function tap(x, y) {
+  const hits = chibis.filter((c) => c.hit(x, y)).sort((a, b) => b.view.zIndex - a.view.zIndex);
+  if (hits.length) { select(hits[0], true); return; }
+  ray.setFromCamera(new THREE.Vector2((x / W()) * 2 - 1, -(y / H()) * 2 + 1), camera);
+  const p = new THREE.Vector3();
+  if (!ray.ray.intersectPlane(floorPlane, p)) return;
+  const r = Math.hypot(p.x, p.z);
+  if (r > 9.4) return;
+  if (r > WALK_R) { p.x *= WALK_R / r; p.z *= WALK_R / r; }
+  if (r < FOUNTAIN_R + 0.2) { const k = (FOUNTAIN_R + 0.3) / (r || 1); p.x *= k; p.z *= k; }
+  selected.manual = true; selected.goTo(p.x, p.z);
+  marker.position.set(p.x, 0.035, p.z); markerT = 0;
+}
+
+document.getElementById('btnHi').addEventListener('click', () => {
+  chibis.forEach((c, i) => setTimeout(() => { c.hop(); c.say(pick(HELLO)); }, i * 110));
+});
+const btnTime = document.getElementById('btnTime');
+btnTime.addEventListener('click', () => {
+  envTarget = envTarget === DAY ? DUSK : DAY;
+  btnTime.textContent = envTarget === DAY ? '切換黃昏' : '切換白天';
+});
+
+addEventListener('resize', () => {
+  three.setSize(W(), H());
+  pixi.resize(W(), H());
+  frameCamera();
+});
+
+// ---------------------------------------------------------------- loop
+const clock = new THREE.Clock();
+let t = 0;
+document.getElementById('loading').classList.add('hide');
+function loop() {
+  const dt = Math.min(0.05, clock.getDelta());
+  t += dt;
+  updateKeys();
+
+  // environment blend (day <-> dusk)
+  const k = 1 - Math.exp(-2.2 * dt);
+  for (const key of ['top', 'mid', 'bottom', 'fog', 'hemiSky', 'hemiGround', 'sun']) env[key].lerp(envTarget[key], k);
+  env.hemi = lerp(env.hemi, envTarget.hemi, k); env.sunI = lerp(env.sunI, envTarget.sunI, k); env.lamp = lerp(env.lamp, envTarget.lamp, k);
+  env.sunPos.lerp(envTarget.sunPos, k);
+  scene.fog.color.copy(env.fog);
+  hemi.color.copy(env.hemiSky); hemi.groundColor.copy(env.hemiGround); hemi.intensity = env.hemi;
+  sun.color.copy(env.sun); sun.intensity = env.sunI; sun.position.copy(env.sunPos);
+  lampMats.forEach((m) => { m.emissiveIntensity = env.lamp; });
+
+  // camera: gentle follow of the selected character
+  const follow = W() / H() < 0.9 ? 0.75 : 0.3;
+  cam.tx = damp(cam.tx, selected.pos.x * follow, 2.5, dt);
+  cam.tz = damp(cam.tz, 0.6 + selected.pos.z * follow * 0.6, 2.5, dt);
+  cam.yaw = damp(cam.yaw, cam.yawT + Math.sin(t * 0.17) * 0.035, 3, dt);
+  cam.pitch = damp(cam.pitch, cam.pitchT, 3, dt);
+  cam.dist = damp(cam.dist, cam.distT, 2.2, dt);
+  camera.position.set(
+    cam.tx + Math.sin(cam.yaw) * Math.cos(cam.pitch) * cam.dist,
+    Math.sin(cam.pitch) * cam.dist + 0.6,
+    cam.tz + Math.cos(cam.yaw) * Math.cos(cam.pitch) * cam.dist,
+  );
+  camera.lookAt(cam.tx, 1.1, cam.tz);
+  camera.updateMatrixWorld();
+
+  // ambient motion
+  water.material.emissiveIntensity = 0.15 + Math.sin(t * 2) * 0.05;
+  droplets.forEach((d) => {
+    if (d.userData.spin) { d.rotation.y += dt * d.userData.spin; d.position.y = d.userData.base + Math.sin(t * 1.6 + d.userData.spin * 5) * 0.12; return; }
+    const u = (d.userData.t + t * 0.55) % 1;
+    const a = d.userData.a, r = 0.15 + u * 1.05;
+    d.position.set(Math.cos(a) * r, 0.92 + Math.sin(u * Math.PI) * 0.85 - u * 0.4, Math.sin(a) * r);
+  });
+  clouds.forEach((c) => { c.position.x += c.userData.speed * dt; if (c.position.x > 52) c.position.x = -52; });
+  rocks.position.y = Math.sin(t * 0.6) * 0.12;
+  selRing.position.set(selected.pos.x, 0.03, selected.pos.z);
+  selRing.scale.setScalar(1 + Math.sin(t * 5) * 0.06);
+  selRing.material.opacity = 0.75 + Math.sin(t * 5) * 0.15;
+  if (markerT < 1) { markerT += dt * 1.6; marker.scale.setScalar(1 + markerT * 2.2); marker.material.opacity = (1 - markerT) * 0.9; }
+
+  chibis.forEach((c) => c.update(dt, t, chibis));
+
+  three.resetState();
+  three.render(scene, camera);
+  pixi.resetState();
+  pixi.render({ container: stage2d });
+  requestAnimationFrame(loop);
+}
+loop();
+</script>
+</body>
+</html>

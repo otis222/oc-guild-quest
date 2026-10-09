@@ -1,0 +1,46 @@
+{
+  "note": "ComfyUI 生成的 AI 小人。玩家第一次進入時選一隻當自己的 OC，其他的當公會成員。player_default（silhouette.png）只在圖片載入失敗時當備用。",
+  "player_default": "silhouette.png",
+  "members": [
+    {
+      "file": "maid_1.png",
+      "name": "白髮女僕 #1"
+    },
+    {
+      "file": "bunny_1.png",
+      "name": "兔耳 #1"
+    },
+    {
+      "file": "nurse_1.png",
+      "name": "護士 #1"
+    },
+    {
+      "file": "chick_1.png",
+      "name": "小雞女僕 #1"
+    },
+    {
+      "file": "maid_2.png",
+      "name": "白髮女僕 #2"
+    },
+    {
+      "file": "bunny_2.png",
+      "name": "兔耳 #2"
+    },
+    {
+      "file": "nurse_2.png",
+      "name": "護士 #2"
+    },
+    {
+      "file": "chick_2.png",
+      "name": "小雞女僕 #2"
+    },
+    {
+      "file": "maid_3.png",
+      "name": "白髮女僕 #3"
+    },
+    {
+      "file": "maid_4.png",
+      "name": "白髮女僕 #4"
+    }
+  ]
+}

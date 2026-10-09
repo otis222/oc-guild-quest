@@ -1,24 +1,27 @@
 import { describe, expect, it } from 'vitest';
-import { buildOcCard, cellProgress, monthDay, RESULT_SHARE } from '../../src/core/ocCard';
+import { buildOcCard, cellProgress, COMPLETION_CELLS, monthDay, RESULT_SHARE } from '../../src/core/ocCard';
 import { addCommission, completeLevel, createGuildState } from '../../src/core/state';
-import { templateLevels } from '../../src/core/templates';
-import type { CourseType, GuildState } from '../../src/core/types';
+import { CUSTOM_COURSE_LEVELS, levelsFrom, templateLevels } from '../../src/core/templates';
+import type { CourseId, CourseType, GuildState } from '../../src/core/types';
 
 const OC = { name: '小鈴', sprite: 'maid_1.png' };
 const add = (s: GuildState, course: CourseType, id: string, at: number): GuildState =>
   addCommission(s, { course, title: id, dueAt: 9e12, levels: templateLevels(course) }, at, id);
+/** 接一張自訂課程的委託：還沒有這門課就一起建立，已經有了就沿用 */
+const addCustom = (s: GuildState, label: string, id: string, at: number): GuildState =>
+  addCommission(s, { course: { label, part: 'layout' }, title: id, dueAt: 9e12, levels: levelsFrom(CUSTOM_COURSE_LEVELS) }, at, id);
 const finish = (s: GuildState, id: string, n: number): GuildState => {
   let next = s;
   const levels = s.commissions.find((c) => c.id === id)!.levels.filter((l) => l.kind === 'timed');
   for (const l of levels.slice(0, n)) next = completeLevel(next, id, l.id, 5000);
   return next;
 };
-const section = (s: GuildState, course: CourseType) => buildOcCard(s).sections.find((x) => x.course === course)!;
+const section = (s: GuildState, course: CourseId) => buildOcCard(s).sections.find((x) => x.course.id === course)!;
 
 describe('OC 設定卡', () => {
   it('還沒有委託：4 區 × 3 格都是空的，完成度 0', () => {
     const card = buildOcCard(createGuildState(OC, 1));
-    expect(card.sections.map((x) => x.course)).toEqual(['typography', 'color', 'composition', 'drawing']);
+    expect(card.sections.map((x) => x.course.id)).toEqual(['typography', 'color', 'composition', 'drawing']);
     expect(card.sections.every((x) => x.cells.length === 3 && x.cells.every((c) => c.commission === null))).toBe(true);
     expect(card.completion).toBe(0);
   });
@@ -86,6 +89,29 @@ describe('OC 設定卡', () => {
     }
     s = { ...s, commissions: s.commissions.map((c) => ({ ...c, submittedAt: 99 })) };
     expect(buildOcCard(s).completion).toBe(1);
+  });
+
+  it('每門自訂課程多一區（3 格），排在內建 4 區後面；第 4 張一樣回到第 1 格', () => {
+    let s = createGuildState(OC, 1);
+    for (const [id, at] of [['p1', 10], ['p2', 20], ['p3', 30], ['p4', 40]] as const) s = addCustom(s, '攝影', id, at);
+    s = addCustom(s, '動畫', 'a1', 50);
+    const card = buildOcCard(s);
+    expect(card.sections.map((x) => x.course.label)).toEqual(['字體設計', '色彩學', '平面構成', '手繪基礎', '攝影', '動畫']);
+    const photo = card.sections[4];
+    expect(photo.cells.map((c) => c.commission?.id)).toEqual(['p4', 'p2', 'p3']);
+    expect(photo.history.map((c) => c.id)).toEqual(['p1']);
+    expect(card.sections[5].cells.map((c) => c.commission?.id ?? null)).toEqual(['a1', null, null]);
+  });
+
+  it('自訂課程也算進完成度，但分母還是 12 格：多一門課完成度不會往下掉', () => {
+    let s = add(createGuildState(OC, 1), 'color', 'c1', 10);
+    s = finish(s, 'c1', 5);
+    const before = buildOcCard(s).completion;
+    s = addCustom(s, '攝影', 'p1', 20);
+    expect(buildOcCard(s).completion).toBeCloseTo(before);
+    s = finish(s, 'p1', 5);
+    expect(COMPLETION_CELLS).toBe(12);
+    expect(buildOcCard(s).completion).toBeCloseTo((2 * (1 - RESULT_SHARE)) / 12);
   });
 
   it('任務數被改過（例如 3 個）：就切成 3 片', () => {

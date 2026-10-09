@@ -2,9 +2,9 @@
 // 上面是委託和任務名稱、大數字倒數；下面是「休息一下／繼續任務」「提早完成」「再 5 分鐘」。
 // 時間到：手機支援就震動一下，問「這個任務完成了嗎？」→「完成了」或「再 5 分鐘」。
 import type { Actions } from '../core/actions';
+import { courseInfo } from '../core/courses';
 import { findLevel } from '../core/state';
 import type { GuildStore } from '../core/store';
-import { courseLabel } from '../core/templates';
 import { EXTEND_MINUTES, formatClock, remainingMs, timerPhase, type TimerPhase } from '../core/timer';
 import type { Commission, Level } from '../core/types';
 import { COPY } from './copy';
@@ -101,7 +101,7 @@ export function openTimer(d: TimerDeps): void {
     phase = next;
 
     const timed = commission.levels.filter((l) => l.kind === 'timed');
-    course.textContent = `${courseLabel(commission.course)}・${commission.title}`;
+    course.textContent = `${courseInfo(d.store.state, commission.course).label}・${commission.title}`;
     title.textContent = level.title;
     step.textContent = T.step(timed.indexOf(level) + 1, timed.length);
     clock.textContent = formatClock(remainingMs(level, now));

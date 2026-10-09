@@ -1,12 +1,13 @@
 // 遊戲狀態：整個 GuildState 存在 'state' 這個 key。
 // 下面的操作都是純函式（回傳新的狀態，不改舊的）；要存檔時用 updateState 包起來，
 // 它會先讀最新的存檔再套用，所以開兩個分頁也不會拿舊資料蓋掉新進度。
+import { addCustomCourse, type NewCourse } from './courses';
 import { newId } from './id';
 import { STATE_KEY, type KV } from './storage';
 import { EXTEND_MINUTES, extendTimer, finishTimer, pauseTimer, resumeTimer, startTimer } from './timer';
-import type { Commission, CourseType, GuildState, Level, OCProfile } from './types';
+import type { Commission, CourseId, GuildState, Level, OCProfile } from './types';
 
-export const STATE_VERSION = 1;
+export const STATE_VERSION = 2;
 /** 設定卡每區幾格（企劃表 7.4） */
 export const CELLS_PER_COURSE = 3;
 
@@ -16,10 +17,13 @@ type RawState = Record<string, unknown> & { version: number };
  * 改 GuildState 的結構時：STATE_VERSION 加一，在 MIGRATIONS 補上舊版號的函式，舊存檔讀進來會自動升級。
  */
 export type Migration = (old: RawState) => RawState;
-const MIGRATIONS: Readonly<Record<number, Migration>> = {};
+const MIGRATIONS: Readonly<Record<number, Migration>> = {
+  // 第 2 版：加上自訂課程
+  1: (old) => ({ ...old, version: 2, customCourses: [] }),
+};
 
 export function createGuildState(oc: OCProfile, now = Date.now()): GuildState {
-  return { version: STATE_VERSION, createdAt: now, oc, commissions: [], guildLevel: 1, exhibits: [] };
+  return { version: STATE_VERSION, createdAt: now, oc, commissions: [], guildLevel: 1, exhibits: [], customCourses: [] };
 }
 
 export interface LevelDraft {
@@ -29,18 +33,25 @@ export interface LevelDraft {
 }
 
 export interface CommissionDraft {
-  course: CourseType;
+  /** 已經有的課程，或要跟這張委託一起建立的新課程 */
+  course: CourseId | NewCourse;
   title: string;
   dueAt: number;
   levels: LevelDraft[];
 }
 
-/** 接一張新委託，放在 commissions 最後面。cellIndex：同課程的第幾張，3 格滿了從 0 再一輪（企劃表 7.4）。 */
-export function addCommission(s: GuildState, draft: CommissionDraft, now = Date.now(), id = newId(now)): GuildState {
-  const sameCourse = s.commissions.filter((c) => c.course === draft.course).length;
+/**
+ * 接一張新委託，放在 commissions 最後面。cellIndex：同課程的第幾張，3 格滿了從 0 再一輪（企劃表 7.4）。
+ * 委託單上新加的課程在這裡一起建立，所以不會有「課程建好了、委託沒存到」的情況。
+ */
+export function addCommission(s0: GuildState, draft: CommissionDraft, now = Date.now(), id = newId(now)): GuildState {
+  const { state: s, courseId } = typeof draft.course === 'string'
+    ? { state: s0, courseId: draft.course }
+    : addCustomCourse(s0, draft.course, now);
+  const sameCourse = s.commissions.filter((c) => c.course === courseId).length;
   const commission: Commission = {
     id,
-    course: draft.course,
+    course: courseId,
     title: draft.title,
     createdAt: now,
     dueAt: draft.dueAt,
@@ -52,10 +63,16 @@ export function addCommission(s: GuildState, draft: CommissionDraft, now = Date.
   return { ...s, commissions: [...s.commissions, commission] };
 }
 
-/** 找委託和裡面的某一關；找不到就丟錯 */
-export function findLevel(s: GuildState, commissionId: string, levelId: string): { commission: Commission; level: Level } {
+/** 找委託；找不到就丟錯 */
+export function findCommission(s: GuildState, commissionId: string): Commission {
   const commission = s.commissions.find((x) => x.id === commissionId);
   if (!commission) throw new Error(`找不到委託 ${commissionId}`);
+  return commission;
+}
+
+/** 找委託和裡面的某一關；找不到就丟錯 */
+export function findLevel(s: GuildState, commissionId: string, levelId: string): { commission: Commission; level: Level } {
+  const commission = findCommission(s, commissionId);
   const level = commission.levels.find((l) => l.id === levelId);
   if (!level) throw new Error(`找不到關卡 ${levelId}`);
   return { commission, level };
@@ -198,5 +215,6 @@ function isRawState(v: unknown): v is RawState {
 function isGuildState(s: RawState): s is RawState & GuildState {
   return s.version === STATE_VERSION && typeof s.createdAt === 'number'
     && isObj(s.oc) && typeof s.oc.name === 'string' && typeof s.oc.sprite === 'string'
-    && Array.isArray(s.commissions) && typeof s.guildLevel === 'number' && Array.isArray(s.exhibits);
+    && Array.isArray(s.commissions) && typeof s.guildLevel === 'number' && Array.isArray(s.exhibits)
+    && Array.isArray(s.customCourses);
 }

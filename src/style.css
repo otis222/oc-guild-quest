@@ -130,9 +130,15 @@ button:disabled:hover { background: var(--panel); }
 .seg-btn {
   position: relative; display: grid; place-items: center; min-height: 44px; padding: 4px; cursor: pointer;
   border-radius: 12px; background: #fff; border: 1px solid var(--panel-line); font-size: 14px; font-weight: 700; text-align: center;
+  overflow-wrap: anywhere;
 }
 .seg-btn:has(input:checked) { border-color: var(--accent); background: var(--accent-soft); box-shadow: 0 0 0 2px var(--accent) inset; }
 .seg-btn:has(input:focus-visible) { outline: 2px solid var(--accent); outline-offset: 2px; }
+.seg-btn.is-add { border-style: dashed; border-color: rgba(47, 37, 66, 0.3); color: var(--ink-soft); }
+.seg-btn.is-add:has(input:checked) { border-style: solid; border-color: var(--accent); color: var(--ink); }
+/* 新課程的名稱和部位：選「＋ 新課程」才出現 */
+.new-course { margin-top: 10px; padding: 10px 12px; border-radius: 12px; border: 1px dashed rgba(47, 37, 66, 0.25); background: rgba(255, 255, 255, 0.6); }
+.new-course .field:last-child { margin-bottom: 0; }
 .field > input[type="datetime-local"] { display: block; min-width: 0; min-height: 44px; -webkit-appearance: none; appearance: none; text-align: left; }
 .level-list { list-style: none; margin: 0 0 8px; padding: 0; display: grid; grid-template-columns: minmax(0, 1fr); gap: 6px; }
 .level { display: flex; align-items: center; gap: 6px; }
@@ -192,7 +198,7 @@ button:disabled:hover { background: var(--panel); }
 .oc-meter .bar { flex: 1 1 auto; height: 8px; overflow: hidden; border-radius: 4px; background: #ece6f2; }
 .oc-meter .bar > span { display: block; height: 100%; border-radius: 4px; background: var(--accent); }
 .card .oc-change { justify-self: start; margin-top: 2px; padding: 6px 12px; font-size: 13px; box-shadow: none; background: #fff; }
-.oc-sec { margin-top: 14px; }
+.oc-sec { margin-top: 14px; scroll-margin: 16px 0; }
 .oc-sec-head { display: flex; align-items: baseline; justify-content: space-between; gap: 8px; margin-bottom: 6px; }
 .oc-sec-name { font-size: 14px; font-weight: 800; }
 .oc-sec-name::before {

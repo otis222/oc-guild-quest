@@ -1,6 +1,21 @@
 // 資料結構（企劃表 7.2）。改結構時：GuildState.version 加一，並在 state.ts 補一個 migration。
 
+/** 內建的 4 門課（企劃表 7.3） */
 export type CourseType = 'typography' | 'color' | 'composition' | 'drawing';
+/** 玩家在委託單上自己加的課程 */
+export type CustomCourseId = `custom:${string}`;
+/** 委託屬於哪門課：內建課程或自訂課程 */
+export type CourseId = CourseType | CustomCourseId;
+/** 交件後作業成果變成 OC 的哪個部分：名牌、配色、版面、草稿（T6 依這個產生部件） */
+export type PartType = 'nameplate' | 'palette' | 'layout' | 'sketch';
+
+/** 自訂課程（10/10 組員要求，7.2 沒有）：名稱由玩家取，交件後的部位從 4 種選一種 */
+export interface CustomCourse {
+  id: CustomCourseId;
+  label: string;
+  part: PartType;
+  createdAt: number;
+}
 
 export interface Level {
   id: string;
@@ -17,7 +32,7 @@ export interface Level {
 
 export interface Commission {
   id: string;
-  course: CourseType;
+  course: CourseId;
   title: string;              // 作業名稱
   createdAt: number;
   dueAt: number;
@@ -37,19 +52,21 @@ export interface OCProfile {
 }
 
 export interface GuildState {
-  version: 1;
+  version: 2;
   createdAt: number;
   oc: OCProfile;
   commissions: Commission[];
   guildLevel: number;
   exhibits: string[];         // 展品照片 id，最近 5 張
+  customCourses: CustomCourse[]; // 自訂課程，照建立順序（第 2 版加的）
 }
 
 export type EventType =
   | 'app_opened' | 'oc_created' | 'commission_created' | 'level_started'
   | 'level_paused' | 'level_resumed' | 'level_extended' | 'level_completed'
   | 'photo_added' | 'commission_submitted' | 'oc_card_opened' | 'exhibit_opened'
-  | 'oc_changed';              // T5 加的：在設定卡換造型（7.2 沒有）
+  | 'oc_changed'               // T5 加的：在設定卡換造型（7.2 沒有）
+  | 'course_created';          // 接委託時新增自訂課程（7.2 沒有）
 
 export interface LogEvent {
   t: number;

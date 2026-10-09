@@ -1,5 +1,8 @@
 import { describe, expect, it } from 'vitest';
-import { COURSE_TEMPLATES, courseLabel, LEVEL_MINUTES, SUBMIT_LEVEL_TITLE, templateLevels } from '../../src/core/templates';
+import {
+  COURSE_TEMPLATES, courseTemplate, CUSTOM_COURSE_LEVELS, LEVEL_MINUTES, levelsFrom, PART_LABELS, PARTS, SUBMIT_LEVEL_TITLE,
+  templateLevels,
+} from '../../src/core/templates';
 import type { CourseType } from '../../src/core/types';
 
 const ALL: CourseType[] = ['typography', 'color', 'composition', 'drawing'];
@@ -7,11 +10,12 @@ const ALL: CourseType[] = ['typography', 'color', 'composition', 'drawing'];
 describe('課程範本（企劃表 7.3）', () => {
   it('4 門課都有，順序是字體設計、色彩學、平面構成、手繪基礎', () => {
     expect(COURSE_TEMPLATES.map((t) => t.course)).toEqual(ALL);
-    expect(ALL.map(courseLabel)).toEqual(['字體設計', '色彩學', '平面構成', '手繪基礎']);
+    expect(ALL.map((c) => courseTemplate(c).label)).toEqual(['字體設計', '色彩學', '平面構成', '手繪基礎']);
   });
 
   it('交件後變成的 OC 部分：名牌、配色、版面、草稿（T5）', () => {
-    expect(COURSE_TEMPLATES.map((t) => t.part)).toEqual(['名牌', '配色', '版面', '草稿']);
+    expect(COURSE_TEMPLATES.map((t) => PART_LABELS[t.part])).toEqual(['名牌', '配色', '版面', '草稿']);
+    expect(PARTS.map((p) => PART_LABELS[p])).toEqual(['名牌', '配色', '版面', '草稿']);
   });
 
   it('每門課預設 5 關', () => {
@@ -35,5 +39,9 @@ describe('課程範本（企劃表 7.3）', () => {
     a.pop();
     expect(templateLevels('drawing')[0].title).toBe('熱身線條');
     expect(templateLevels('drawing')).toHaveLength(6);
+  });
+
+  it('自訂課程的通用範本：5 個任務＋交件', () => {
+    expect(levelsFrom(CUSTOM_COURSE_LEVELS).map((l) => l.title)).toEqual(['讀要求圈重點', '找參考', '打草稿', '製作', '檢查修改', '交件']);
   });
 });

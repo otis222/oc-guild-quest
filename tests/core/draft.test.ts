@@ -1,8 +1,10 @@
 import { describe, expect, it } from 'vitest';
+import { addCustomCourse } from '../../src/core/courses';
 import {
   addLevel, canAddLevel, canMoveLevel, canRemoveLevel, draftProblem, MAX_TIMED_LEVELS, moveLevel, removeLevel, renameLevel,
   toCommissionDraft, type DraftForm,
 } from '../../src/core/draft';
+import { createGuildState } from '../../src/core/state';
 import { templateLevels } from '../../src/core/templates';
 
 const titles = (levels: { title: string }[]): string[] => levels.map((l) => l.title);
@@ -54,23 +56,42 @@ describe('改關卡清單', () => {
 
 describe('送出前檢查', () => {
   const ok: DraftForm = { course: 'drawing', title: '人體速寫', dueAt: 1000, levels: base };
+  const s = addCustomCourse(createGuildState({ name: '小鈴', sprite: 'maid_1.png' }, 1), { label: '攝影', part: 'layout' }, 5, 'p1').state;
 
   it('依序指出缺的東西：課程 → 作業名稱 → 期限 → 任務名稱', () => {
-    expect(draftProblem({ ...ok, course: null, title: '' })).toBe('course');
-    expect(draftProblem({ ...ok, title: '   ' })).toBe('title');
-    expect(draftProblem({ ...ok, dueAt: NaN })).toBe('due');
-    expect(draftProblem({ ...ok, levels: renameLevel(base, 2, '  ') })).toBe('taskTitle');
-    expect(draftProblem(ok)).toBeNull();
+    expect(draftProblem({ ...ok, course: null, title: '' }, s)).toBe('course');
+    expect(draftProblem({ ...ok, title: '   ' }, s)).toBe('title');
+    expect(draftProblem({ ...ok, dueAt: NaN }, s)).toBe('due');
+    expect(draftProblem({ ...ok, levels: renameLevel(base, 2, '  ') }, s)).toBe('taskTitle');
+    expect(draftProblem(ok, s)).toBeNull();
+    expect(draftProblem({ ...ok, course: 'custom:p1' }, s)).toBeNull();
+  });
+
+  it('新課程：名稱 → 跟已經有的課程同名 → 部位，都填好才能送出', () => {
+    const fresh = (label: string, part: 'sketch' | null = 'sketch'): DraftForm => ({ ...ok, course: { label, part }, title: '' });
+    expect(draftProblem(fresh('  '), s)).toBe('courseName');
+    expect(draftProblem(fresh(' 攝影 '), s)).toBe('courseTaken');
+    expect(draftProblem(fresh('色彩學'), s)).toBe('courseTaken');
+    expect(draftProblem(fresh('動畫', null), s)).toBe('coursePart');
+    expect(draftProblem(fresh('動畫'), s)).toBe('title');
+    expect(draftProblem({ ...fresh('動畫'), title: '角色走路' }, s)).toBeNull();
   });
 
   it('整理成草稿：去掉多餘空白', () => {
-    const d = toCommissionDraft({ ...ok, title: '  人體   速寫 ', levels: renameLevel(base, 0, ' 熱身  線條 ') });
+    const d = toCommissionDraft({ ...ok, title: '  人體   速寫 ', levels: renameLevel(base, 0, ' 熱身  線條 ') }, s);
     expect(d.title).toBe('人體 速寫');
     expect(d.levels[0].title).toBe('熱身 線條');
     expect(d.levels).toHaveLength(6);
+    expect(d.course).toBe('drawing');
+  });
+
+  it('新課程的草稿帶著整理好的課程名稱和部位', () => {
+    const d = toCommissionDraft({ ...ok, course: { label: '  角色   動畫 ', part: 'sketch' } }, s);
+    expect(d.course).toEqual({ label: '角色 動畫', part: 'sketch' });
   });
 
   it('有問題就丟錯', () => {
-    expect(() => toCommissionDraft({ ...ok, title: '' })).toThrow('title');
+    expect(() => toCommissionDraft({ ...ok, title: '' }, s)).toThrow('title');
+    expect(() => toCommissionDraft({ ...ok, course: { label: '動畫', part: null } }, s)).toThrow('coursePart');
   });
 });

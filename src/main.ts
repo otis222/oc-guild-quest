@@ -3,13 +3,13 @@ import './style.css';
 import * as THREE from 'three';
 import type { Texture } from 'pixi.js';
 import { createActions } from './core/actions';
+import { courseInfo } from './core/courses';
 import { logEvent } from './core/events';
 import type { SpriteManifest } from './core/manifest';
 import { cellOf } from './core/ocCard';
 import { pickGuildMembers, reassignMembers, uploadedPhotoId, uploadSpriteRef } from './core/oc';
 import { createGuildState, currentWork, findLevel, loadState, saveState } from './core/state';
 import { deletePhoto, getPhoto, idbKV, putPhoto, type KV } from './core/storage';
-import { courseTemplate } from './core/templates';
 import { createGuildStore, type GuildStore } from './core/store';
 import { elapsedMs, plannedMs, timerPhase } from './core/timer';
 import type { GuildState, OCProfile } from './core/types';
@@ -200,9 +200,8 @@ function startGuild({ kv, manifest, store, lobby, player, look: initialLook }: G
     onCompleted: (commission, level) => {
       player.hop();
       player.say(COPY.speech.taskDone);
-      const t = courseTemplate(commission.course);
       showLitToast({
-        cell: cellOf(commission), course: commission.course, courseLabel: t.label, part: t.part, levelId: level.id,
+        cell: cellOf(commission), course: courseInfo(store.state, commission.course), levelId: level.id,
         onOpen: () => {
           void actions.noteOcCardOpened('toast');
           showCard({ highlight: { commissionId: commission.id, levelId: level.id } });

@@ -1,7 +1,9 @@
 // 進入點：組裝大廳場景、小人、鏡頭、輸入和 HUD，跑每幀的迴圈。
 import './style.css';
 import * as THREE from 'three';
+import { logEvent } from './core/events';
 import { pick } from './core/math';
+import { idbKV } from './core/storage';
 import { CameraRig } from './scene/camera';
 import { Chibi, HELLO, POKED, type ChibiDef, type ChibiWorld } from './scene/chibi';
 import { FOUNTAIN_R, WALK_R } from './scene/constants';
@@ -13,6 +15,10 @@ import { createViewport } from './scene/viewport';
 import { createHud } from './ui/hud';
 
 async function main(): Promise<void> {
+  const kv = idbKV();
+  // 先記開啟，3D 場景載入失敗也記得到；寫不進去不影響大廳
+  logEvent(kv, 'app_opened').catch((err: unknown) => console.warn('事件紀錄寫入失敗', err));
+
   const stage = document.getElementById('stage');
   if (!stage) throw new Error('找不到 #stage');
   const vp = createViewport(stage);

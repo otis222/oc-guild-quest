@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import {
-  addCommission, completeLevel, createGuildState, loadState, migrate, saveState, STATE_VERSION, updateState,
-  type CommissionDraft,
+  activeCommissions, addCommission, completedCommissions, completeLevel, createGuildState, isSubmitted, loadState, migrate,
+  nextLevel, saveState, STATE_VERSION, timedProgress, updateState, type CommissionDraft,
 } from '../../src/core/state';
 import { STATE_KEY } from '../../src/core/storage';
 import type { CourseType, GuildState } from '../../src/core/types';
@@ -81,6 +81,30 @@ describe('完成關卡', () => {
     expect(() => completeLevel(base, 'nope', l0.id)).toThrow();
     expect(() => completeLevel(base, 'c1', 'nope')).toThrow();
     expect(() => completeLevel(base, 'c1', submit.id)).toThrow();
+  });
+});
+
+describe('查詢', () => {
+  it('進度：計時關卡完成幾個／總共幾個（交件關不算）', () => {
+    let s = addCommission(createGuildState(OC, 1), draft(), 2, 'c1');
+    expect(timedProgress(s.commissions[0])).toEqual({ done: 0, total: 5 });
+    s = completeLevel(s, 'c1', s.commissions[0].levels[0].id, 3);
+    s = completeLevel(s, 'c1', s.commissions[0].levels[2].id, 4);
+    expect(timedProgress(s.commissions[0])).toEqual({ done: 2, total: 5 });
+    expect(nextLevel(s.commissions[0])?.title).toBe('3 組配色草稿');
+  });
+
+  it('進行中照截止時間排（逾期的也在），已完成照交件時間新到舊', () => {
+    let s = createGuildState(OC, 1);
+    s = addCommission(s, { ...draft(), dueAt: 300 }, 1, 'late');
+    s = addCommission(s, { ...draft(), dueAt: 100 }, 1, 'overdue');
+    s = addCommission(s, { ...draft(), dueAt: 200 }, 1, 'soon');
+    s = addCommission(s, { ...draft(), dueAt: 50 }, 1, 'done-a');
+    s = addCommission(s, { ...draft(), dueAt: 60 }, 1, 'done-b');
+    s = { ...s, commissions: s.commissions.map((c) => (c.id === 'done-a' ? { ...c, submittedAt: 10 } : c.id === 'done-b' ? { ...c, submittedAt: 20 } : c)) };
+    expect(activeCommissions(s).map((c) => c.id)).toEqual(['overdue', 'soon', 'late']);
+    expect(completedCommissions(s).map((c) => c.id)).toEqual(['done-b', 'done-a']);
+    expect(isSubmitted(s.commissions[3])).toBe(true);
   });
 });
 

@@ -58,6 +58,13 @@ export class CameraRig {
     return out;
   }
 
+  /** 舞台上的像素座標有沒有點到這些 3D 物件（含子物件） */
+  hits(x: number, y: number, targets: THREE.Object3D[]): boolean {
+    ndc.set((x / this.vp.w()) * 2 - 1, -(y / this.vp.h()) * 2 + 1);
+    ray.setFromCamera(ndc, this.camera);
+    return ray.intersectObjects(targets, true).length > 0;
+  }
+
   /** 舞台上的像素座標 → 地板（y=0）上的點；沒打到地板回傳 null */
   floorPoint(x: number, y: number): THREE.Vector3 | null {
     ndc.set((x / this.vp.w()) * 2 - 1, -(y / this.vp.h()) * 2 + 1);

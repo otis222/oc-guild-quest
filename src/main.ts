@@ -3,11 +3,14 @@ import './style.css';
 import * as THREE from 'three';
 import type { Texture } from 'pixi.js';
 import { logEvent } from './core/events';
+import { newId } from './core/id';
 import type { SpriteManifest } from './core/manifest';
 import { pickGuildMembers, uploadedPhotoId, uploadSpriteRef } from './core/oc';
-import { createGuildState, loadState, saveState } from './core/state';
+import { addCommission, createGuildState, loadState, saveState, type CommissionDraft } from './core/state';
 import { getPhoto, idbKV, putPhoto, type KV } from './core/storage';
+import { createGuildStore, type GuildStore } from './core/store';
 import type { GuildState, OCProfile } from './core/types';
+import { createBoard } from './scene/board';
 import { CameraRig } from './scene/camera';
 import type { Chibi, ChibiWorld } from './scene/chibi';
 import { Input } from './scene/input';
@@ -16,6 +19,8 @@ import { createPlaza } from './scene/plaza';
 import { createRenderers } from './scene/renderer';
 import { loadManifest, loadTexture, spriteUrl } from './scene/sprites';
 import { createViewport } from './scene/viewport';
+import { openBoard } from './ui/board';
+import { COPY } from './ui/copy';
 import { showCreateOcCard } from './ui/createOC';
 import { createHud } from './ui/hud';
 
@@ -33,6 +38,7 @@ async function main(): Promise<void> {
 
   const gfx = await createRenderers(vp);
   const plaza = createPlaza();
+  const board = createBoard(plaza.scene);
   const rig = new CameraRig(vp);
   const world: ChibiWorld = { scene: plaza.scene, layer: gfx.charLayer, rig, shadowGeo: plaza.shadowGeo, shadowTex: plaza.shadowTex };
   const lobby = createLobby(world, plaza);
@@ -40,7 +46,14 @@ async function main(): Promise<void> {
     onHello: () => lobby.helloAll(),
     onToggleTime: () => plaza.toggleTime(),
   });
-  const input = new Input(vp, rig, (x, y) => lobby.tap(x, y));
+  /** 建立 OC、讀好存檔之後才能打開委託板 */
+  let showBoard: (() => void) | null = null;
+  // 點擊：先看有沒有點到小人（小人畫在最前面），再看委託板，最後才是地板
+  const input = new Input(vp, rig, (x, y) => {
+    if (lobby.pokeAt(x, y)) return;
+    if (showBoard && rig.hits(x, y, board.targets)) { showBoard(); return; }
+    lobby.walkTo(x, y);
+  });
 
   addEventListener('resize', () => {
     gfx.resize();
@@ -72,7 +85,7 @@ async function main(): Promise<void> {
   } catch (err) {
     // 存檔讀不出來時不能讓玩家重建 OC，不然會把舊存檔蓋掉
     console.error('讀不到存檔', err);
-    hud.showError('讀不到存檔。請重新整理，還是不行的話請聯絡組員。');
+    hud.showError(COPY.loadError);
     return;
   }
 
@@ -84,6 +97,20 @@ async function main(): Promise<void> {
   const player = await spawnCharacters(lobby, kv, manifest, state.oc);
   hud.hideLoading();
   if (isNew) player.hop();
+
+  const store = createGuildStore(kv, state);
+  const open = (): void => openBoard({ store, createCommission: (draft) => createCommission(kv, store, draft) });
+  showBoard = open;
+  hud.onBoard(open);
+}
+
+/** 接新委託：存檔＋記 commission_created */
+async function createCommission(kv: KV, store: GuildStore, draft: CommissionDraft): Promise<void> {
+  const id = newId();
+  await store.update((s) => addCommission(s, draft, Date.now(), id));
+  await logEvent(kv, 'commission_created', {
+    commissionId: id, data: { course: draft.course, levels: draft.levels.length, dueAt: draft.dueAt },
+  }).catch(warn('事件紀錄寫入失敗'));
 }
 
 /** 第一次進入：顯示建立 OC 的卡片，存好新存檔才回傳 */

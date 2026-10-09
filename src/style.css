@@ -95,6 +95,59 @@ button:disabled:hover { background: var(--panel); }
 }
 .card .primary:hover { background: #ff5a88; }
 .card .primary:disabled { opacity: 1; color: #fff; background: #d6cfde; }
+.card .secondary { width: 100%; padding: 10px; font-size: 14px; box-shadow: none; background: #fff; }
+
+/* 對話框（委託板等）的標題列 */
+.card-head { display: flex; align-items: center; justify-content: space-between; gap: 8px; margin-bottom: 12px; }
+.card-head h2 { margin: 0; outline: none; }
+.icon-btn {
+  flex: 0 0 auto; width: 36px; height: 36px; padding: 0; display: inline-grid; place-items: center;
+  font-size: 15px; line-height: 1; box-shadow: none; background: #fff;
+}
+.card-body > .primary:first-child { margin-top: 0; }
+
+/* 委託板：委託卡 */
+.section-title { margin: 16px 0 8px; font-size: 13px; font-weight: 700; color: var(--ink-soft); }
+.commissions { list-style: none; margin: 0; padding: 0; display: grid; grid-template-columns: minmax(0, 1fr); gap: 8px; }
+.commission { padding: 10px 12px; border-radius: 14px; background: #fff; border: 1px solid var(--panel-line); }
+.commission.is-overdue { border-color: #f3a3b8; background: #fff5f8; }
+.c-row { display: flex; align-items: center; justify-content: space-between; gap: 8px; }
+.c-course, .c-due { font-size: 12px; font-weight: 700; color: var(--ink-soft); }
+.is-overdue .c-due { color: #c2185b; }
+.c-title { margin: 4px 0 8px; font-size: 16px; font-weight: 700; overflow-wrap: anywhere; }
+.c-progress { display: inline-flex; align-items: center; gap: 8px; font-size: 13px; font-weight: 700; color: var(--ink-soft); }
+.segs { display: inline-flex; gap: 3px; }
+.seg { width: 14px; height: 8px; border-radius: 3px; background: #ece6f2; }
+.seg.on { background: var(--accent); }
+.card .c-start { padding: 8px 12px; font-size: 13px; box-shadow: none; }
+.done { margin-top: 16px; }
+.done summary { padding: 4px 0; font-size: 13px; font-weight: 700; color: var(--ink-soft); cursor: pointer; }
+.done .commissions { margin-top: 8px; }
+.empty, .hint { margin: 4px 0; font-size: 13px; color: var(--ink-soft); }
+
+/* 接新委託 */
+.seg-group { display: grid; grid-template-columns: repeat(4, 1fr); gap: 6px; }
+.seg-btn {
+  position: relative; display: grid; place-items: center; min-height: 44px; padding: 4px; cursor: pointer;
+  border-radius: 12px; background: #fff; border: 1px solid var(--panel-line); font-size: 14px; font-weight: 700; text-align: center;
+}
+.seg-btn:has(input:checked) { border-color: var(--accent); background: var(--accent-soft); box-shadow: 0 0 0 2px var(--accent) inset; }
+.seg-btn:has(input:focus-visible) { outline: 2px solid var(--accent); outline-offset: 2px; }
+.field > input[type="datetime-local"] { display: block; min-width: 0; min-height: 44px; -webkit-appearance: none; appearance: none; text-align: left; }
+.level-list { list-style: none; margin: 0 0 8px; padding: 0; display: grid; grid-template-columns: minmax(0, 1fr); gap: 6px; }
+.level { display: flex; align-items: center; gap: 6px; }
+.level-no { flex: 0 0 20px; text-align: center; font-size: 13px; font-weight: 700; color: var(--ink-soft); }
+.level input {
+  flex: 1 1 auto; min-width: 0; font: inherit; font-size: 16px; color: var(--ink); background: #fff;
+  padding: 7px 10px; border-radius: 10px; border: 1px solid var(--panel-line);
+  -webkit-user-select: text; user-select: text;
+}
+.level input:focus-visible { outline: 2px solid var(--accent); outline-offset: 1px; }
+.level.is-submit { min-height: 38px; }
+.level-fixed { flex: 1 1 auto; font-weight: 700; }
+.level-note { font-size: 12px; color: var(--ink-soft); }
+.form-actions { display: grid; grid-template-columns: 2fr 1fr; gap: 8px; align-items: end; }
+.form-actions .primary, .form-actions .secondary { margin-top: 0; }
 @media (max-width: 640px) {
   .title p { display: none; }
   .title h1 { font-size: 15px; }

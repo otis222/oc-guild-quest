@@ -1,5 +1,6 @@
 // 主角 OC 與公會成員的小規則
 import type { SpriteEntry } from './manifest';
+import { cleanText } from './text';
 
 /** OC 名字最多幾個字（名字會顯示在小人頭上，太長會擋到別人） */
 export const OC_NAME_MAX = 12;
@@ -17,9 +18,7 @@ export function uploadedPhotoId(sprite: string): string | null {
 }
 
 /** 整理玩家輸入的名字：去掉前後空白、連續空白變一個、超過上限就截掉 */
-export function cleanOcName(input: string): string {
-  return Array.from(input.trim().replace(/\s+/g, ' ')).slice(0, OC_NAME_MAX).join('').trim();
-}
+export const cleanOcName = (input: string): string => cleanText(input, OC_NAME_MAX);
 
 /** 公會成員：照 manifest 順序，排除玩家選的那隻，最多 max 隻 */
 export function pickGuildMembers(members: readonly SpriteEntry[], playerSprite: string, max = MAX_GUILD_MEMBERS): SpriteEntry[] {

@@ -35,6 +35,16 @@ export interface ChibiControl {
 
 type ChibiState = 'idle' | 'walk' | 'talk';
 
+/** 頭上進度環：fraction 0～1；dim 是暫停中（灰色） */
+export interface RingValue {
+  fraction: number;
+  dim: boolean;
+}
+
+const RING_ON = 0xff6f97;
+const RING_DIM = 0xb9b0c6;
+const RING_TRACK = 0xece6f2;
+
 const tmpV = new THREE.Vector3(), tmpV2 = new THREE.Vector3();
 
 export class Chibi {
@@ -59,6 +69,9 @@ export class Chibi {
   readonly label: Text;
   bubble: Container | null = null;
   bubbleT = 0;
+  /** 頭上的進度環（計時中才有） */
+  private ring: Graphics | null = null;
+  private ringValue: RingValue | null = null;
   readonly shadow: THREE.Mesh<THREE.PlaneGeometry, THREE.MeshBasicMaterial>;
   /** 上一幀在螢幕上的位置與大小，給點擊判定用 */
   scr = { x: 0, y: 0, h: 0, w: 0 };
@@ -97,6 +110,16 @@ export class Chibi {
   }
 
   hop(): void { this.hopT = 0; }
+
+  /** 顯示或拿掉頭上的進度環 */
+  setRing(v: RingValue | null): void {
+    this.ringValue = v;
+    if (!v && this.ring) {
+      this.view.removeChild(this.ring);
+      this.ring.destroy();
+      this.ring = null;
+    }
+  }
 
   goTo(x: number, z: number): void { this.target = new THREE.Vector3(x, 0, z); this.state = 'walk'; }
 
@@ -202,13 +225,31 @@ export class Chibi {
     this.label.position.set(0, -pxH - lift - 4);
     this.label.alpha = isSelected ? 1 : 0.82;
     this.label.scale.set(clamp(pxH / 150, 0.75, 1.15));
+    // 進度環畫在名字上面；有進度環時，對話泡泡往上移到進度環上面
+    let headTop = -pxH - lift;
+    if (this.ringValue) {
+      if (!this.ring) { this.ring = new Graphics(); this.view.addChild(this.ring); }
+      const k = clamp(pxH / 150, 0.8, 1.2), r = 11 * k;
+      const y = -pxH - lift - 4 - this.label.height - r - 3;
+      const f = clamp(this.ringValue.fraction, 0, 1);
+      this.ring.clear();
+      this.ring.circle(0, 0, r).fill(0xffffff).stroke({ width: 2, color: INK });
+      this.ring.circle(0, 0, r - 4.5).stroke({ width: 4, color: RING_TRACK });
+      if (f > 0.001) {
+        this.ring.arc(0, 0, r - 4.5, -Math.PI / 2, -Math.PI / 2 + f * Math.PI * 2)
+          .stroke({ width: 4, color: this.ringValue.dim ? RING_DIM : RING_ON, cap: 'round' });
+      }
+      this.ring.position.set(0, y);
+      // 泡泡的尖角放在 headTop - 22k，讓它剛好落在進度環上方 2px
+      headTop = y - r - 2 + 22 * k;
+    }
     if (this.bubble) {
       this.bubbleT -= dt;
       const k = clamp(pxH / 150, 0.8, 1.2);
       const pop = Math.min(1, (2.6 - this.bubbleT) * 7);
       const s = (this.bubbleT < 0.25 ? Math.max(0, this.bubbleT / 0.25) : 1) * (0.6 + 0.4 * pop) * k;
       this.bubble.scale.set(s); this.bubble.alpha = Math.min(1, this.bubbleT * 4);
-      this.bubble.position.set(0, -pxH - lift - 22 * k);
+      this.bubble.position.set(0, headTop - 22 * k);
       if (this.bubbleT <= 0) { this.view.removeChild(this.bubble); this.bubble = null; }
     }
     // depth sort: nearer to camera on top

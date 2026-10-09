@@ -1,14 +1,15 @@
-// 進入點：組裝大廳、讀存檔；第一次進入先建立 OC，再把主角和公會成員放進大廳。
+// 進入點：組裝大廳、讀存檔；第一次進入先建立 OC，再把主角和公會成員放進大廳，接上委託板和任務計時。
 import './style.css';
 import * as THREE from 'three';
 import type { Texture } from 'pixi.js';
+import { createActions } from './core/actions';
 import { logEvent } from './core/events';
-import { newId } from './core/id';
 import type { SpriteManifest } from './core/manifest';
 import { pickGuildMembers, uploadedPhotoId, uploadSpriteRef } from './core/oc';
-import { addCommission, createGuildState, loadState, saveState, type CommissionDraft } from './core/state';
+import { createGuildState, currentWork, findLevel, loadState, saveState } from './core/state';
 import { getPhoto, idbKV, putPhoto, type KV } from './core/storage';
 import { createGuildStore, type GuildStore } from './core/store';
+import { elapsedMs, plannedMs, timerPhase } from './core/timer';
 import type { GuildState, OCProfile } from './core/types';
 import { createBoard } from './scene/board';
 import { CameraRig } from './scene/camera';
@@ -23,6 +24,8 @@ import { openBoard } from './ui/board';
 import { COPY } from './ui/copy';
 import { showCreateOcCard } from './ui/createOC';
 import { createHud } from './ui/hud';
+import { openTimer } from './ui/timer';
+import { createWakeLock } from './ui/wakeLock';
 
 const ORIGIN = new THREE.Vector3();
 const warn = (what: string) => (err: unknown): void => console.warn(what, err);
@@ -46,12 +49,19 @@ async function main(): Promise<void> {
     onHello: () => lobby.helloAll(),
     onToggleTime: () => plaza.toggleTime(),
   });
-  /** 建立 OC、讀好存檔之後才能打開委託板 */
-  let showBoard: (() => void) | null = null;
+
+  /** 讀好存檔（或建立 OC）之後才有；之前大廳只有場景 */
+  let guild: Guild | null = null;
   // 點擊：先看有沒有點到小人（小人畫在最前面），再看委託板，最後才是地板
   const input = new Input(vp, rig, (x, y) => {
-    if (lobby.pokeAt(x, y)) return;
-    if (showBoard && rig.hits(x, y, board.targets)) { showBoard(); return; }
+    const hit = lobby.pickAt(x, y);
+    if (hit) {
+      // 做任務中點主角：回到計時畫面
+      if (guild && hit === lobby.player && lobby.working) guild.openCurrentTask();
+      else lobby.poke(hit);
+      return;
+    }
+    if (guild && rig.hits(x, y, board.targets)) { guild.openBoard(); return; }
     lobby.walkTo(x, y);
   });
 
@@ -67,7 +77,8 @@ async function main(): Promise<void> {
     const dt = Math.min(0.05, clock.getDelta());
     t += dt;
     const player = lobby.player;
-    if (input.updateKeys() && player) player.manual = true;
+    if (input.updateKeys() && player && !lobby.working) player.manual = true;
+    guild?.syncWork();
 
     plaza.update(dt, t, player ? player.pos : null);
     rig.update(dt, t, player ? player.pos : ORIGIN);
@@ -98,19 +109,64 @@ async function main(): Promise<void> {
   hud.hideLoading();
   if (isNew) player.hop();
 
-  const store = createGuildStore(kv, state);
-  const open = (): void => openBoard({ store, createCommission: (draft) => createCommission(kv, store, draft) });
-  showBoard = open;
-  hud.onBoard(open);
+  guild = startGuild(kv, createGuildStore(kv, state), lobby, player);
+  hud.onBoard(guild.openBoard);
+  guild.syncWork(true);
+  // 計時中重新整理：直接回到計時畫面（暫停中的就留在大廳，從委託板「回到任務」）
+  guild.resumeIfRunning();
 }
 
-/** 接新委託：存檔＋記 commission_created */
-async function createCommission(kv: KV, store: GuildStore, draft: CommissionDraft): Promise<void> {
-  const id = newId();
-  await store.update((s) => addCommission(s, draft, Date.now(), id));
-  await logEvent(kv, 'commission_created', {
-    commissionId: id, data: { course: draft.course, levels: draft.levels.length, dueAt: draft.dueAt },
-  }).catch(warn('事件紀錄寫入失敗'));
+interface Guild {
+  openBoard(): void;
+  /** 打開正在做的任務的計時畫面 */
+  openCurrentTask(): void;
+  /** 每幀：主角要不要站在委託板前、頭上的進度環。instant：直接站過去（剛載入時） */
+  syncWork(instant?: boolean): void;
+  /** 有任務正在跑（或時間到）就打開計時畫面 */
+  resumeIfRunning(): void;
+}
+
+/** 存檔準備好之後：委託板、任務計時、主角做任務的樣子 */
+function startGuild(kv: KV, store: GuildStore, lobby: Lobby, player: Chibi): Guild {
+  const actions = createActions(kv, store);
+  const wakeLock = createWakeLock();
+
+  const showTimer = (commissionId: string, levelId: string): void => openTimer({
+    store, actions, wakeLock, commissionId, levelId,
+    // 完成一個任務：主角跳一下說話（T5 的 OC 設定卡點亮動畫也接在這裡）
+    onCompleted: () => { player.hop(); player.say(COPY.speech.taskDone); },
+  });
+
+  /** 開始任務（還沒開始的話）並打開計時畫面 */
+  async function openTask(commissionId: string, levelId: string): Promise<void> {
+    if (findLevel(store.state, commissionId, levelId).level.status === 'todo') await actions.startLevel(commissionId, levelId);
+    showTimer(commissionId, levelId);
+  }
+
+  return {
+    openBoard: () => openBoard({
+      store,
+      createCommission: (draft) => actions.createCommission(draft),
+      openTask: (cId, lId) => { openTask(cId, lId).catch((err: unknown) => console.error('開始任務失敗', err)); },
+    }),
+    openCurrentTask() {
+      const work = currentWork(store.state);
+      if (work) showTimer(work.commission.id, work.level.id);
+    },
+    syncWork(instant = false) {
+      const work = currentWork(store.state);
+      if (!work) { lobby.setWork(null); return; }
+      const now = Date.now();
+      lobby.setWork({
+        fraction: Math.min(1, elapsedMs(work.level, now) / plannedMs(work.level)),
+        dim: timerPhase(work.level, now) === 'paused',
+      }, instant);
+    },
+    resumeIfRunning() {
+      const work = currentWork(store.state);
+      if (work && timerPhase(work.level, Date.now()) !== 'paused') showTimer(work.commission.id, work.level.id);
+    },
+  };
 }
 
 /** 第一次進入：顯示建立 OC 的卡片，存好新存檔才回傳 */

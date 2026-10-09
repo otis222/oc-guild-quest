@@ -35,6 +35,7 @@ export const COPY = {
     empty: '板子上還沒有委託。',
     done: (n: number) => `完成的委託（${n}）`,
     start: (minutes: number) => `開始任務（${minutes} 分鐘）`,
+    resume: '回到任務',
     submit: '交件',
     submitted: '已交件',
     progress: (done: number, total: number) => `進度 ${done}/${total}`,
@@ -66,6 +67,26 @@ export const COPY = {
       due: '還沒定期限。',
       taskTitle: '有任務還沒取名字。',
     },
+  },
+
+  /** 任務計時 */
+  timer: {
+    step: (n: number, total: number) => `第 ${n}/${total} 個任務`,
+    backToLobby: '回大廳',
+    pause: '休息一下',
+    resume: '繼續任務',
+    finishEarly: '提早完成',
+    extend: (minutes: number) => `再 ${minutes} 分鐘`,
+    paused: '休息中',
+    timeUp: '時間到',
+    askDone: '這個任務完成了嗎？',
+    done: '完成了',
+    failed: '沒記到，再按一次。',
+  },
+
+  /** 主角頭上的對話泡泡 */
+  speech: {
+    taskDone: '任務完成！',
   },
 
   dialog: {

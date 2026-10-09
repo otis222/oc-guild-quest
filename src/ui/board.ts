@@ -10,7 +10,7 @@ import {
 } from '../core/state';
 import type { GuildStore } from '../core/store';
 import { COURSE_TEMPLATES, courseLabel, LEVEL_MINUTES, templateLevels } from '../core/templates';
-import type { Commission, CourseType } from '../core/types';
+import type { Commission, CourseType, Level } from '../core/types';
 import { COPY } from './copy';
 import { el, on } from './dom';
 import { openDialog } from './overlay';
@@ -18,7 +18,9 @@ import { openDialog } from './overlay';
 export interface BoardDeps {
   store: GuildStore;
   /** 建立委託（存檔、記事件）；丟錯代表沒有存成功 */
-  createCommission(draft: CommissionDraft): Promise<void>;
+  createCommission(draft: CommissionDraft): Promise<unknown>;
+  /** 開始任務或回到正在做的任務（打開計時畫面，委託板會被換掉） */
+  openTask(commissionId: string, levelId: string): void;
 }
 
 /** 開著的時候多久更新一次倒數 */
@@ -42,11 +44,11 @@ export function openBoard(deps: BoardDeps): void {
       on(el('button', { type: 'button', class: 'primary' }, T.newCommission), 'click', showForm),
       el('h3', { class: 'section-title' }, T.active(active.length)),
       active.length
-        ? el('ul', { class: 'commissions' }, ...active.map((c) => commissionCard(c, now)))
+        ? el('ul', { class: 'commissions' }, ...active.map((c) => commissionCard(c, now, deps.openTask)))
         : el('p', { class: 'empty' }, T.empty),
       el('details', { class: 'done' },
         el('summary', {}, T.done(done.length)),
-        done.length ? el('ul', { class: 'commissions' }, ...done.map((c) => commissionCard(c, now))) : null),
+        done.length ? el('ul', { class: 'commissions' }, ...done.map((c) => commissionCard(c, now, deps.openTask))) : null),
     );
   }
 
@@ -63,7 +65,14 @@ export function openBoard(deps: BoardDeps): void {
   }
 }
 
-function commissionCard(c: Commission, now: number): HTMLLIElement {
+/** 委託卡右下角的按鈕：開始任務、回到任務；交件在 T6 才有作用，先停用 */
+function taskButton(c: Commission, next: Level, openTask: BoardDeps['openTask']): HTMLButtonElement {
+  if (next.kind !== 'timed') return el('button', { type: 'button', class: 'c-start', disabled: true }, T.submit);
+  const label = next.status === 'doing' ? T.resume : T.start(next.minutes);
+  return on(el('button', { type: 'button', class: 'c-start' }, label), 'click', () => openTask(c.id, next.id));
+}
+
+function commissionCard(c: Commission, now: number, openTask: BoardDeps['openTask']): HTMLLIElement {
   const { done, total } = timedProgress(c);
   const submitted = isSubmitted(c);
   const overdue = !submitted && isOverdue(c.dueAt, now);
@@ -77,10 +86,7 @@ function commissionCard(c: Commission, now: number): HTMLLIElement {
     el('div', { class: 'c-title' }, c.title),
     el('div', { class: 'c-row' },
       el('span', { class: 'c-progress', 'aria-label': T.progress(done, total) }, segs, `${done}/${total}`),
-      // 開始任務、交件在 T4、T6 才有作用，先停用
-      !submitted && next
-        ? el('button', { type: 'button', class: 'c-start', disabled: true }, next.kind === 'timed' ? T.start(next.minutes) : T.submit)
-        : null),
+      !submitted && next ? taskButton(c, next, openTask) : null),
   );
 }
 

@@ -100,6 +100,14 @@ export const COPY = {
     historyItem: (work: string, done: number, total: number, submitted: boolean) => `${work}　${done}/${total}${submitted ? '・已交件' : ''}`,
   },
 
+  /** 完成任務後大廳的小提示 */
+  toast: {
+    lit: '設定卡亮了一片',
+    detail: (course: string, work: string, done: number, total: number) => `${course}・${work}　${done}/${total}`,
+    /** 企劃表 7.7 的按鈕範例 */
+    open: '看 OC 設定卡',
+  },
+
   /** 換造型 */
   look: {
     title: '換造型',

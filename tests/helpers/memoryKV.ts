@@ -20,5 +20,8 @@ export function memoryKV(): KV & { raw: Map<string, unknown> } {
       raw.set(key, structuredClone(next));
       return next;
     },
+    async del(key) {
+      raw.delete(key);
+    },
   };
 }

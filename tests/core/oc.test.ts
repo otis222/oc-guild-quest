@@ -1,5 +1,7 @@
 import { describe, expect, it } from 'vitest';
-import { cleanOcName, MAX_GUILD_MEMBERS, OC_NAME_MAX, pickGuildMembers, uploadedPhotoId, uploadSpriteRef } from '../../src/core/oc';
+import {
+  cleanOcName, MAX_GUILD_MEMBERS, OC_NAME_MAX, pickGuildMembers, reassignMembers, uploadedPhotoId, uploadSpriteRef,
+} from '../../src/core/oc';
 import { parseManifest } from '../../src/core/manifest';
 import raw from '../../public/sprites/manifest.json';
 
@@ -50,5 +52,28 @@ describe('公會成員', () => {
 
   it('小人不夠多時就全部都來', () => {
     expect(pickGuildMembers(members.slice(0, 3), 'maid_1.png').map((m) => m.file)).toEqual(['bunny_1.png', 'nurse_1.png']);
+  });
+});
+
+describe('換造型後重新分配公會成員', () => {
+  const files = (sprite: string): string[] => pickGuildMembers(members, sprite).map((m) => m.file);
+
+  it('換成某位成員的樣子：只換掉那一位，其他人留在原位', () => {
+    const before = files('maid_1.png');
+    const after = reassignMembers(before, files('nurse_1.png'));
+    expect(after).toEqual(['bunny_1.png', 'maid_1.png', 'chick_1.png', 'maid_2.png', 'bunny_2.png', 'nurse_2.png']);
+    expect(after).not.toContain('nurse_1.png');
+    expect(new Set(after)).toEqual(new Set(files('nurse_1.png')));
+  });
+
+  it('換成上傳的圖：原本的造型回到成員裡，換掉一位名單外的', () => {
+    const after = reassignMembers(files('maid_1.png'), files('upload:x'));
+    expect(after).toEqual(['bunny_1.png', 'nurse_1.png', 'chick_1.png', 'maid_2.png', 'bunny_2.png', 'maid_1.png']);
+    expect(new Set(after)).toEqual(new Set(files('upload:x')));
+  });
+
+  it('名單沒變就不動', () => {
+    const before = files('maid_1.png');
+    expect(reassignMembers(before, before)).toEqual(before);
   });
 });

@@ -177,6 +177,56 @@ button:disabled:hover { background: var(--panel); }
 .timer-bottom .card-msg { min-height: 0; text-align: center; }
 .ghost { flex: 0 0 auto; padding: 6px 10px; font-size: 13px; box-shadow: none; background: transparent; border-color: transparent; color: var(--ink-soft); }
 .ghost:hover { background: rgba(47, 37, 66, 0.06); }
+
+/* OC 設定卡 */
+.oc-head { display: flex; align-items: center; gap: 14px; }
+.oc-portrait {
+  flex: 0 0 auto; width: 78px; height: 100px; display: grid; place-items: end center; overflow: hidden;
+  border-radius: 14px; border: 1px solid var(--panel-line); background: linear-gradient(#fff, var(--accent-soft));
+}
+.oc-portrait img { max-width: 100%; max-height: 94px; object-fit: contain; }
+.oc-info { flex: 1 1 auto; min-width: 0; display: grid; gap: 4px; }
+.oc-name { font-size: 18px; font-weight: 800; overflow-wrap: anywhere; }
+.oc-level { font-size: 12px; font-weight: 700; color: var(--ink-soft); }
+.oc-meter { display: flex; align-items: center; gap: 8px; font-size: 12px; font-weight: 700; color: var(--ink-soft); }
+.oc-meter .bar { flex: 1 1 auto; height: 8px; overflow: hidden; border-radius: 4px; background: #ece6f2; }
+.oc-meter .bar > span { display: block; height: 100%; border-radius: 4px; background: var(--accent); }
+.card .oc-change { justify-self: start; margin-top: 2px; padding: 6px 12px; font-size: 13px; box-shadow: none; background: #fff; }
+.oc-sec { margin-top: 14px; }
+.oc-sec-head { display: flex; align-items: baseline; justify-content: space-between; gap: 8px; margin-bottom: 6px; }
+.oc-sec-name { font-size: 14px; font-weight: 800; }
+.oc-sec-name::before {
+  content: ''; display: inline-block; width: 9px; height: 9px; margin-right: 6px; border-radius: 50%; background: var(--c);
+}
+.oc-sec-part { font-size: 12px; font-weight: 700; color: var(--ink-soft); }
+.oc-cells { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 8px; }
+.oc-cell { min-width: 0; display: grid; justify-items: center; gap: 2px; text-align: center; }
+.pie { width: 72px; height: 72px; overflow: visible; }
+.pie .slice { fill: #ece6f2; stroke: #fff; stroke-width: 2.5; cursor: pointer; outline: none; }
+.pie .slice.lit { fill: var(--c); }
+.pie .slice.is-picked, .pie .slice:focus-visible { stroke: var(--ink); stroke-width: 3; }
+.pie-center { fill: #fff; stroke: rgba(47, 37, 66, 0.15); stroke-width: 1.5; }
+.is-done .pie-center { fill: var(--c); stroke: #fff; stroke-width: 2.5; }
+.pie-text { font-size: 15px; font-weight: 800; fill: var(--ink); text-anchor: middle; dominant-baseline: central; pointer-events: none; }
+.is-done .pie-text { fill: #fff; font-size: 14px; }
+.pie-empty { fill: none; stroke: rgba(47, 37, 66, 0.25); stroke-width: 2; stroke-dasharray: 6 5; }
+.cell-title { max-width: 100%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: 12px; font-weight: 700; }
+.cell-empty { font-size: 11px; line-height: 1.35; color: var(--ink-soft); }
+.oc-detail { margin: 6px 0 0; font-size: 13px; font-weight: 700; }
+.oc-detail:empty { display: none; }
+.oc-history { margin-top: 6px; }
+.oc-history summary { font-size: 12px; font-weight: 700; color: var(--ink-soft); cursor: pointer; }
+.oc-history ul { margin: 4px 0 0; padding-left: 18px; font-size: 12px; color: var(--ink-soft); }
+/* 剛完成的那一片：0.7 秒點亮 */
+@keyframes light-up {
+  0% { transform: scale(0.4); opacity: 0.2; }
+  55% { transform: scale(1.14); opacity: 1; }
+  100% { transform: scale(1); opacity: 1; }
+}
+.pie .slice.just-lit { transform-box: view-box; transform-origin: 50% 50%; animation: light-up 0.7s cubic-bezier(0.2, 0.8, 0.3, 1.2) both; }
+@media (prefers-reduced-motion: reduce) {
+  .pie .slice.just-lit { animation: none; }
+}
 @media (max-width: 640px) {
   .title p { display: none; }
   .title h1 { font-size: 15px; }

@@ -107,6 +107,21 @@ describe('委託與任務的操作', () => {
     expect(await types()).toEqual(['commission_created']);
   });
 
+  it('換造型：存檔裡的圖換掉並記 oc_changed；換成一樣的不記', async () => {
+    const { actions, store, kv } = await setup();
+    expect(await actions.changeOcSprite('upload:abc')).toBe(true);
+    expect(store.state.oc.sprite).toBe('upload:abc');
+    expect((await loadEvents(kv)).at(-1)).toMatchObject({ type: 'oc_changed', data: { from: 'maid_1.png', to: 'upload:abc' } });
+    expect(await actions.changeOcSprite('upload:abc')).toBe(false);
+    expect((await loadEvents(kv)).filter((e) => e.type === 'oc_changed')).toHaveLength(1);
+  });
+
+  it('打開設定卡記 oc_card_opened', async () => {
+    const { actions, kv } = await setup();
+    await actions.noteOcCardOpened('hud');
+    expect((await loadEvents(kv)).at(-1)).toMatchObject({ type: 'oc_card_opened', data: { via: 'hud' } });
+  });
+
   it('交件關不能用計時操作', async () => {
     const { actions, cId, levelIds } = await setup();
     await expect(actions.startLevel(cId, levelIds[5])).rejects.toThrow();

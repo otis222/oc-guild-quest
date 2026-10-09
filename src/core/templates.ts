@@ -6,6 +6,8 @@ export interface CourseTemplate {
   course: CourseType;
   /** 畫面上顯示的課程名稱 */
   label: string;
+  /** 交件後作業成果會變成 OC 的哪個部分（T5 設定卡上標示） */
+  part: string;
   /** 預設的計時關卡（各 LEVEL_MINUTES 分鐘），最後再自動加一個交件關 */
   levels: readonly string[];
 }
@@ -16,10 +18,10 @@ export const LEVEL_MINUTES = 10;
 export const SUBMIT_LEVEL_TITLE = '交件';
 
 export const COURSE_TEMPLATES: readonly CourseTemplate[] = [
-  { course: 'typography', label: '字體設計', levels: ['讀要求圈重點', '找 3 個參考字', '字形草稿', '描線上墨', '修細節'] },
-  { course: 'color', label: '色彩學', levels: ['讀要求選主題', '3 組配色草稿', '上色（一）', '上色（二）', '檢查明度對比'] },
-  { course: 'composition', label: '平面構成', levels: ['讀要求列元素', '3 張縮圖草稿', '定網格與對齊', '調行距字距', '整體檢查'] },
-  { course: 'drawing', label: '手繪基礎', levels: ['熱身線條', '抓大形', '修比例', '明暗', '細節'] },
+  { course: 'typography', label: '字體設計', part: '名牌', levels: ['讀要求圈重點', '找 3 個參考字', '字形草稿', '描線上墨', '修細節'] },
+  { course: 'color', label: '色彩學', part: '配色', levels: ['讀要求選主題', '3 組配色草稿', '上色（一）', '上色（二）', '檢查明度對比'] },
+  { course: 'composition', label: '平面構成', part: '版面', levels: ['讀要求列元素', '3 張縮圖草稿', '定網格與對齊', '調行距字距', '整體檢查'] },
+  { course: 'drawing', label: '手繪基礎', part: '草稿', levels: ['熱身線條', '抓大形', '修比例', '明暗', '細節'] },
 ];
 
 export function courseTemplate(course: CourseType): CourseTemplate {

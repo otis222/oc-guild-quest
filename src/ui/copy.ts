@@ -84,6 +84,32 @@ export const COPY = {
     failed: '沒記到，再按一次。',
   },
 
+  /** OC 設定卡 */
+  card: {
+    title: 'OC 設定卡',
+    guildLevel: (n: number) => `公會等級 ${n}`,
+    completion: (pct: number) => `完成度 ${pct}%`,
+    changeLook: '換造型',
+    unlocks: (part: string) => `交件後解鎖：${part}`,
+    /** 企劃表 T5 指定的說法 */
+    emptyCell: (course: string) => `接一張${course}委託來點亮`,
+    sliceDone: (md: string, course: string, task: string, work: string) => `${md} ${course}・${task}（${work}）`,
+    sliceTodo: (task: string, work: string) => `${task}・還沒完成（${work}）`,
+    pieLabel: (course: string, work: string, done: number, total: number) => `${course}・${work}，${done}/${total}`,
+    history: (n: number) => `歷史（${n}）`,
+    historyItem: (work: string, done: number, total: number, submitted: boolean) => `${work}　${done}/${total}${submitted ? '・已交件' : ''}`,
+  },
+
+  /** 換造型 */
+  look: {
+    title: '換造型',
+    pick: '選一位冒險者，或上傳你畫的 OC',
+    save: '就用這個',
+    saving: '換裝中…',
+    cancel: '先不換',
+    saveFailed: '沒換成功，再按一次。',
+  },
+
   /** 主角頭上的對話泡泡 */
   speech: {
     taskDone: '任務完成！',

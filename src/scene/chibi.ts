@@ -111,6 +111,11 @@ export class Chibi {
 
   hop(): void { this.hopT = 0; }
 
+  /** 換圖（換造型）；大小會照新圖的高度自動算 */
+  setTexture(tex: Texture): void {
+    this.sprite.texture = tex;
+  }
+
   /** 顯示或拿掉頭上的進度環 */
   setRing(v: RingValue | null): void {
     this.ringValue = v;

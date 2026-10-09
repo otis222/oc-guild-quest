@@ -10,6 +10,10 @@ describe('課程範本（企劃表 7.3）', () => {
     expect(ALL.map(courseLabel)).toEqual(['字體設計', '色彩學', '平面構成', '手繪基礎']);
   });
 
+  it('交件後變成的 OC 部分：名牌、配色、版面、草稿（T5）', () => {
+    expect(COURSE_TEMPLATES.map((t) => t.part)).toEqual(['名牌', '配色', '版面', '草稿']);
+  });
+
   it('每門課預設 5 關', () => {
     for (const t of COURSE_TEMPLATES) expect(t.levels).toHaveLength(5);
   });

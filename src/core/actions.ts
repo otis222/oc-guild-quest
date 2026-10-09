@@ -19,6 +19,10 @@ export interface Actions {
   resumeLevel(commissionId: string, levelId: string): Promise<boolean>;
   extendLevel(commissionId: string, levelId: string): Promise<boolean>;
   completeLevel(commissionId: string, levelId: string): Promise<boolean>;
+  /** 換造型：sprite 是 AI 小人檔名或 upload:<照片 id>；跟原本一樣就不記 */
+  changeOcSprite(sprite: string): Promise<boolean>;
+  /** 玩家自己打開 OC 設定卡（完成任務後自動跳出來的不算） */
+  noteOcCardOpened(via: string): Promise<void>;
 }
 
 type LevelOp = (s: GuildState, commissionId: string, levelId: string, now: number) => GuildState;
@@ -89,5 +93,17 @@ export function createActions(kv: KV, store: GuildStore, clock: () => number = D
     completeLevel: (cId, lId) => levelAction(completeLevel, cId, lId, async (old, next, now) => {
       await log('level_completed', { ...ids(cId, lId), data: { focusMs: next.focusMs, early: timerPhase(old, now) !== 'expired' } }, now);
     }),
+
+    async changeOcSprite(sprite) {
+      const now = clock();
+      const { before, after } = await apply((s) => (s.oc.sprite === sprite ? s : { ...s, oc: { ...s.oc, sprite } }));
+      if (before === after) return false;
+      await log('oc_changed', { data: { from: before.oc.sprite, to: sprite } }, now);
+      return true;
+    },
+
+    async noteOcCardOpened(via) {
+      await log('oc_card_opened', { data: { via } }, clock());
+    },
   };
 }

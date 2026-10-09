@@ -5,9 +5,11 @@ import type { Texture } from 'pixi.js';
 import { createActions } from './core/actions';
 import { logEvent } from './core/events';
 import type { SpriteManifest } from './core/manifest';
-import { pickGuildMembers, uploadedPhotoId, uploadSpriteRef } from './core/oc';
+import { cellOf } from './core/ocCard';
+import { pickGuildMembers, reassignMembers, uploadedPhotoId, uploadSpriteRef } from './core/oc';
 import { createGuildState, currentWork, findLevel, loadState, saveState } from './core/state';
-import { getPhoto, idbKV, putPhoto, type KV } from './core/storage';
+import { deletePhoto, getPhoto, idbKV, putPhoto, type KV } from './core/storage';
+import { courseTemplate } from './core/templates';
 import { createGuildStore, type GuildStore } from './core/store';
 import { elapsedMs, plannedMs, timerPhase } from './core/timer';
 import type { GuildState, OCProfile } from './core/types';
@@ -27,6 +29,7 @@ import { showCreateOcCard, type SpriteChoice } from './ui/createOC';
 import { createHud } from './ui/hud';
 import { openOcCard, type OcCardOptions } from './ui/ocCard';
 import { openTimer } from './ui/timer';
+import { showLitToast } from './ui/toast';
 import { createWakeLock } from './ui/wakeLock';
 
 const ORIGIN = new THREE.Vector3();
@@ -162,22 +165,50 @@ function startGuild({ kv, manifest, store, lobby, player, look: initialLook }: G
     }),
   }, opts);
 
-  /** 換造型：上傳的圖先存成照片，再改存檔、換掉大廳裡主角的圖 */
+  /** 換造型：上傳的圖先存成照片，再改存檔、換掉大廳裡主角的圖；舊的上傳圖刪掉，公會成員重新分配 */
   async function changeLook(choice: SpriteChoice): Promise<void> {
+    const oldSprite = store.state.oc.sprite;
     const sprite = choice.kind === 'preset' ? choice.file : uploadSpriteRef(await putPhoto(kv, choice.blob));
     if (!(await actions.changeOcSprite(sprite))) return;
+    const oldUrl = look.url;
     look = await loadPlayerLook(kv, manifest, sprite);
     player.setTexture(look.tex);
     player.hop();
+    await refreshMembers(sprite);
+    // 舊的上傳圖已經用不到了：從 IndexedDB 刪掉，網址也收回
+    const oldPhoto = uploadedPhotoId(oldSprite);
+    if (oldPhoto && oldSprite !== sprite) {
+      await deletePhoto(kv, oldPhoto).catch(warn('刪除舊的上傳圖失敗'));
+      if (oldUrl.startsWith('blob:')) URL.revokeObjectURL(oldUrl);
+    }
+  }
+
+  /** 公會成員排除主角的新造型：只換掉不該出現的那位，其他人不動 */
+  async function refreshMembers(sprite: string): Promise<void> {
+    const current = lobby.memberKeys();
+    const next = reassignMembers(current, pickGuildMembers(manifest.members, sprite).map((m) => m.file));
+    await Promise.all(next.map(async (file, i) => {
+      if (file === current[i]) return;
+      const tex = await loadTexture(spriteUrl(file)).catch(() => loadTexture(spriteUrl(manifest.playerDefault)));
+      lobby.setMemberLook(i, file, tex);
+    }));
   }
 
   const showTimer = (commissionId: string, levelId: string): void => openTimer({
     store, actions, wakeLock, commissionId, levelId,
-    // 完成一個任務：OC 設定卡跳出來、那一片點亮；關掉設定卡時主角跳一下說話
-    onCompleted: (commission, level) => showCard({
-      highlight: { commissionId: commission.id, levelId: level.id },
-      onClose: () => { player.hop(); player.say(COPY.speech.taskDone); },
-    }),
+    // 完成一個任務：主角跳一下說話，大廳下面浮出小提示（迷你設定格點亮那一片），按了才打開 OC 設定卡
+    onCompleted: (commission, level) => {
+      player.hop();
+      player.say(COPY.speech.taskDone);
+      const t = courseTemplate(commission.course);
+      showLitToast({
+        cell: cellOf(commission), course: commission.course, courseLabel: t.label, part: t.part, levelId: level.id,
+        onOpen: () => {
+          void actions.noteOcCardOpened('toast');
+          showCard({ highlight: { commissionId: commission.id, levelId: level.id } });
+        },
+      });
+    },
   });
 
   /** 開始任務（還沒開始的話）並打開計時畫面 */
@@ -264,7 +295,7 @@ async function spawnCharacters(lobby: Lobby, kv: KV, manifest: SpriteManifest, o
   ]);
   const player = lobby.populate(
     { def: { name: oc.name }, tex: look.tex },
-    memberTexes.map((tex) => ({ def: { name: MEMBER_LABEL }, tex })),
+    memberTexes.map((tex, i) => ({ def: { name: MEMBER_LABEL }, tex, key: members[i].file })),
   );
   return { player, look };
 }

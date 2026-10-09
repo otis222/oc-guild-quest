@@ -59,12 +59,33 @@ describe('OC 設定卡', () => {
     expect(cellProgress(cell)).toBe(1);
   });
 
-  it('完成度：12 格平均；一格的任務占 5/6、交件占 1/6', () => {
+  it('完成度：每張委託的完成度加起來除以 12 格；一張委託的任務占 5/6、交件占 1/6', () => {
     let s = add(createGuildState(OC, 1), 'color', 'c1', 10);
     s = finish(s, 'c1', 5);
     const card = buildOcCard(s);
     expect(cellProgress(card.sections[1].cells[0])).toBeCloseTo(1 - RESULT_SHARE);
     expect(card.completion).toBeCloseTo((1 - RESULT_SHARE) / 12);
+  });
+
+  it('完成度把歷史也算進去：同課程接第 4 張、舊的收進歷史，完成度不會掉', () => {
+    let s = createGuildState(OC, 1);
+    for (const [id, at] of [['d1', 10], ['d2', 20], ['d3', 30]] as const) s = add(s, 'drawing', id, at);
+    s = { ...s, commissions: s.commissions.map((c) => (c.id === 'd1' ? { ...c, submittedAt: 50 } : c)) };
+    const before = buildOcCard(s).completion;
+    s = add(s, 'drawing', 'd4', 40);
+    expect(section(s, 'drawing').history.map((c) => c.id)).toEqual(['d1']);
+    expect(buildOcCard(s).completion).toBeCloseTo(before);
+    expect(before).toBeCloseTo(1 / 12);
+  });
+
+  it('完成度最多 100%', () => {
+    let s = createGuildState(OC, 1);
+    let at = 10;
+    for (const course of ['typography', 'color', 'composition', 'drawing'] as const) {
+      for (let i = 0; i < 4; i++) s = add(s, course, `${course}${i}`, at++);
+    }
+    s = { ...s, commissions: s.commissions.map((c) => ({ ...c, submittedAt: 99 })) };
+    expect(buildOcCard(s).completion).toBe(1);
   });
 
   it('任務數被改過（例如 3 個）：就切成 3 片', () => {

@@ -4,7 +4,7 @@
 //   'state'        整個 GuildState（state.ts）
 //   'events'       事件陣列（events.ts）
 //   'photo:<id>'   照片 Blob；狀態裡只放 id
-import { createStore, get, set, update } from 'idb-keyval';
+import { createStore, del, get, set, update } from 'idb-keyval';
 import { newId } from './id';
 
 export const STATE_KEY = 'state';
@@ -20,6 +20,8 @@ export interface KV {
    * 開了兩個分頁同時寫，也不會互相蓋掉。fn 必須是同步函式；fn 丟錯就什麼都不寫。
    */
   update<T>(key: string, fn: (old: T | undefined) => T): Promise<T>;
+  /** 刪掉一個 key（目前只用在換造型時刪掉舊的上傳圖） */
+  del(key: string): Promise<void>;
 }
 
 /**
@@ -36,6 +38,7 @@ export function idbKV(dbName = 'oc-guild-quest', storeName = 'kv'): KV {
       await update<T>(key, (old) => (next = fn(old)), store);
       return next;
     },
+    del: (key) => del(key, store),
   };
 }
 
@@ -48,4 +51,8 @@ export async function putPhoto(kv: KV, photo: Blob): Promise<string> {
 
 export function getPhoto(kv: KV, id: string): Promise<Blob | undefined> {
   return kv.get<Blob>(photoKey(id));
+}
+
+export function deletePhoto(kv: KV, id: string): Promise<void> {
+  return kv.del(photoKey(id));
 }

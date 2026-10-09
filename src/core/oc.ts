@@ -24,3 +24,13 @@ export const cleanOcName = (input: string): string => cleanText(input, OC_NAME_M
 export function pickGuildMembers(members: readonly SpriteEntry[], playerSprite: string, max = MAX_GUILD_MEMBERS): SpriteEntry[] {
   return members.filter((m) => m.file !== playerSprite).slice(0, max);
 }
+
+/**
+ * 換造型後重新分配公會成員：原本的成員盡量不動，只把不該出現的（例如跟主角新造型一樣的那隻）
+ * 換成新名單裡還沒出場的。current 是每個位置目前的檔名，desired 是 pickGuildMembers 算出的新名單。
+ */
+export function reassignMembers(current: readonly string[], desired: readonly string[]): string[] {
+  const keep = new Set(desired);
+  const unused = desired.filter((f) => !current.includes(f));
+  return current.map((f) => (keep.has(f) ? f : unused.shift() ?? f));
+}

@@ -17,6 +17,8 @@ const NO_KEYS = new Vector3();
 export interface CharacterSpec {
   def: ChibiDef;
   tex: Texture;
+  /** 用的是哪張圖（公會成員用 manifest 檔名，換造型時拿來重新分配） */
+  key?: string;
 }
 
 export interface Lobby {
@@ -37,6 +39,10 @@ export interface Lobby {
    * 剛開始做任務時主角會走到委託板前；instant 為 true 時直接站過去（重新整理後用）。
    */
   setWork(work: RingValue | null, instant?: boolean): void;
+  /** 每位公會成員目前用的圖（照位置） */
+  memberKeys(): string[];
+  /** 換掉第 i 位公會成員的圖 */
+  setMemberLook(index: number, key: string, tex: Texture): void;
   helloAll(): void;
   update(dt: number, t: number, keyDir: Vector3): void;
 }
@@ -44,6 +50,8 @@ export interface Lobby {
 export function createLobby(world: ChibiWorld, plaza: Plaza): Lobby {
   let player: Chibi | null = null;
   let all: Chibi[] = [];
+  let membersList: Chibi[] = [];
+  let keys: string[] = [];
   let working = false;
 
   return {
@@ -55,9 +63,20 @@ export function createLobby(world: ChibiWorld, plaza: Plaza): Lobby {
       const total = members.length + 1;
       const me = new Chibi(world, p.def, p.tex, 0, total);
       me.pos.set(PLAYER_SPAWN.x, 0, PLAYER_SPAWN.z);
-      all = [me, ...members.map((m, i) => new Chibi(world, m.def, m.tex, i + 1, total))];
+      membersList = members.map((m, i) => new Chibi(world, m.def, m.tex, i + 1, total));
+      keys = members.map((m) => m.key ?? '');
+      all = [me, ...membersList];
       player = me;
       return me;
+    },
+
+    memberKeys: () => [...keys],
+
+    setMemberLook(index, key, tex) {
+      const m = membersList[index];
+      if (!m) return;
+      m.setTexture(tex);
+      keys[index] = key;
     },
 
     pickAt(x, y) {

@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { addCommission, createGuildState, saveState, updateState } from '../../src/core/state';
-import { getPhoto, photoKey, putPhoto, STATE_KEY } from '../../src/core/storage';
+import { deletePhoto, getPhoto, photoKey, putPhoto, STATE_KEY } from '../../src/core/storage';
 import { memoryKV } from '../helpers/memoryKV';
 
 describe('照片', () => {
@@ -15,6 +15,15 @@ describe('照片', () => {
 
   it('沒有這張照片就回傳 undefined', async () => {
     expect(await getPhoto(memoryKV(), 'nope')).toBeUndefined();
+  });
+
+  it('刪掉照片後就讀不到了，其他照片不受影響', async () => {
+    const kv = memoryKV();
+    const a = await putPhoto(kv, new Blob(['a'], { type: 'image/png' }));
+    const b = await putPhoto(kv, new Blob(['b'], { type: 'image/png' }));
+    await deletePhoto(kv, a);
+    expect(await getPhoto(kv, a)).toBeUndefined();
+    expect(await (await getPhoto(kv, b))?.text()).toBe('b');
   });
 
   it('狀態裡只放照片 id，不放照片本身', async () => {

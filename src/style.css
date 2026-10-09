@@ -217,6 +217,23 @@ button:disabled:hover { background: var(--panel); }
 .oc-history { margin-top: 6px; }
 .oc-history summary { font-size: 12px; font-weight: 700; color: var(--ink-soft); cursor: pointer; }
 .oc-history ul { margin: 4px 0 0; padding-left: 18px; font-size: 12px; color: var(--ink-soft); }
+/* 大廳的小提示（完成任務後浮在底部按鈕上面） */
+.toast {
+  position: fixed; z-index: 8; left: 50%; transform: translateX(-50%);
+  bottom: calc(max(14px, env(safe-area-inset-bottom)) + 58px);
+  width: min(360px, calc(100% - 32px)); display: flex; align-items: center; gap: 10px; padding: 10px 12px;
+  background: rgba(255, 255, 255, 0.94); animation: toast-in 0.25s ease-out both;
+}
+.toast.is-leaving { animation: toast-out 0.25s ease-in both; }
+@keyframes toast-in { from { opacity: 0; transform: translate(-50%, 12px); } to { opacity: 1; transform: translate(-50%, 0); } }
+@keyframes toast-out { from { opacity: 1; transform: translate(-50%, 0); } to { opacity: 0; transform: translate(-50%, 12px); } }
+.toast-pie .pie { width: 48px; height: 48px; display: block; }
+.toast-pie .pie-text { font-size: 17px; }
+.toast-text { flex: 1 1 auto; min-width: 0; }
+.toast-title { font-size: 14px; font-weight: 800; }
+.toast-sub { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: 12px; font-weight: 700; color: var(--ink-soft); }
+.toast .toast-open { flex: 0 0 auto; padding: 8px 10px; font-size: 13px; box-shadow: none; background: #fff; }
+
 /* 剛完成的那一片：0.7 秒點亮 */
 @keyframes light-up {
   0% { transform: scale(0.4); opacity: 0.2; }
@@ -225,7 +242,7 @@ button:disabled:hover { background: var(--panel); }
 }
 .pie .slice.just-lit { transform-box: view-box; transform-origin: 50% 50%; animation: light-up 0.7s cubic-bezier(0.2, 0.8, 0.3, 1.2) both; }
 @media (prefers-reduced-motion: reduce) {
-  .pie .slice.just-lit { animation: none; }
+  .pie .slice.just-lit, .toast, .toast.is-leaving { animation: none; }
 }
 @media (max-width: 640px) {
   .title p { display: none; }

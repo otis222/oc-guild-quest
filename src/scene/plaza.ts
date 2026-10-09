@@ -1,4 +1,4 @@
-// 3D 大廳：天空、浮島、廣場地板、噴水池、後方拱門展台、招牌、路燈、樹、花、雲，
+// 3D 大廳：天空、浮島、廣場地板、噴水池、後方拱門展台（放展品，見 exhibits.ts）、招牌和公會等級牌、路燈、樹、花、雲，
 // 以及地板上的影子貼圖、選取光圈、點地板的標記。
 import * as THREE from 'three';
 import { pick, rand, lerp } from '../core/math';
@@ -22,11 +22,30 @@ const DUSK: Env = {
 };
 const COLOR_KEYS = ['top', 'mid', 'bottom', 'fog', 'hemiSky', 'hemiGround', 'sun'] as const;
 
+/** 後方拱門前的展台（展品放在這裡，見 exhibits.ts） */
+export interface Pedestal {
+  /** 拱門的群組：面向廣場中心（+z 朝中心） */
+  group: THREE.Group;
+  /** 原本展台上的寶石；放上展品時藏起來 */
+  gem: THREE.Mesh;
+  /** 展台在群組裡的位置（頂面中心） */
+  top: THREE.Vector3;
+}
+
+/** 主角腳下光圈原本的顏色 */
+const RING_COLOR = '#ff6f97';
+
 export interface Plaza {
   scene: THREE.Scene;
   /** 小人腳下影子用的貼圖和形狀 */
   shadowTex: THREE.Texture;
   shadowGeo: THREE.PlaneGeometry;
+  /** 後方 5 座展台，由左到右 */
+  readonly pedestals: readonly Pedestal[];
+  /** 主角腳下光圈的顏色（OC 有了配色就換成最鮮豔的那個）；null 是原本的粉紅 */
+  setRingColor(color: string | null): void;
+  /** 招牌旁邊的公會等級牌（label 是「公會等級」這幾個字） */
+  setGuildLevel(level: number, label: string): void;
   /** 切換白天／黃昏，回傳切換後是不是白天 */
   toggleTime(): boolean;
   /** 在地板上點的位置閃一下白圈 */
@@ -143,6 +162,7 @@ export function createPlaza(): Plaza {
   const ARCH_COLORS = ['#ffd3e0', '#d9ecff', '#fff1c7', '#dff5df', '#e9ddff'];
   const BANNERS = ['委託', '巡展', 'OC', '作業', '完成'];
   const GEM_COLORS = ['#ff8fae', '#7fb6ff', '#ffc85c', '#7fd48f', '#b49bff'];
+  const pedestals: Pedestal[] = [];
   for (let i = 0; i < 5; i++) {
     const a = Math.PI * (1.18 + i * 0.16);
     const x = Math.cos(a) * 11.2, z = Math.sin(a) * 11.2;
@@ -172,17 +192,37 @@ export function createPlaza(): Plaza {
     gem.position.set(0, 1.25, 1.6); gem.castShadow = true; withOutline(gem, 0.08); g.add(gem);
     gem.userData.spin = rand(0.6, 1.1); gem.userData.base = 1.25;
     droplets.push(gem);
+    pedestals.push({ group: g, gem, top: new THREE.Vector3(0, 0.7, 1.6) });
   }
+  const FONT = '"Noto Sans TC","Microsoft JhengHei","PingFang TC",sans-serif';
   const signTex = canvasTex(1024, 256, (c, w, h) => {
     c.fillStyle = '#ffffff'; c.beginPath(); c.roundRect(8, 8, w - 16, h - 16, 60); c.fill();
     c.lineWidth = 10; c.strokeStyle = '#3b2e52'; c.stroke();
     c.fillStyle = '#ff6f97'; c.beginPath(); c.roundRect(34, 34, w - 68, h - 68, 44); c.fill();
-    c.fillStyle = '#fff'; c.font = 'bold 112px "Noto Sans TC","Microsoft JhengHei","PingFang TC",sans-serif';
+    c.fillStyle = '#fff'; c.font = `bold 112px ${FONT}`;
     c.textAlign = 'center'; c.textBaseline = 'middle'; c.fillText('OC 巡展廣場', w / 2, h / 2 + 6);
   });
   const sign = new THREE.Mesh(new THREE.PlaneGeometry(6.4, 1.6), new THREE.MeshBasicMaterial({ map: signTex, transparent: true }));
   sign.position.set(0, 4.75, -12.2); scene.add(sign);
   for (const s of [-1, 1]) prop(new THREE.CylinderGeometry(0.12, 0.12, 4.4, 10), toon('#3b2e52'), s * 2.9, 2.2, -12.25, 0);
+  // 公會等級牌：圓形徽章，掛在招牌右上角（企劃表 7.5：等級只顯示在大廳招牌和設定卡上）
+  const badgeTex = canvasTex(256, 256, () => {});
+  const badge = new THREE.Mesh(new THREE.PlaneGeometry(1.5, 1.5), new THREE.MeshBasicMaterial({ map: badgeTex, transparent: true }));
+  badge.position.set(3.4, 5.45, -12.1); scene.add(badge);
+  function drawBadge(level: number, label: string): void {
+    const cv = badgeTex.image as HTMLCanvasElement;
+    const c = cv.getContext('2d');
+    if (!c) return;
+    const w = cv.width, r = w / 2;
+    c.clearRect(0, 0, w, w);
+    c.fillStyle = '#ffffff'; c.beginPath(); c.arc(r, r, r - 8, 0, Math.PI * 2); c.fill();
+    c.lineWidth = 9; c.strokeStyle = '#3b2e52'; c.stroke();
+    c.fillStyle = '#ffc85c'; c.beginPath(); c.arc(r, r, r - 26, 0, Math.PI * 2); c.fill();
+    c.fillStyle = '#3b2e52'; c.textAlign = 'center'; c.textBaseline = 'middle';
+    c.font = `bold 40px ${FONT}`; c.fillText(label, r, r - 50);
+    c.font = `bold ${level >= 100 ? 80 : 104}px ${FONT}`; c.fillText(String(level), r, r + 28);
+    badgeTex.needsUpdate = true;
+  }
 
   // lamps + bunting around the back half
   const lampMats: THREE.MeshToonMaterial[] = [];
@@ -252,7 +292,7 @@ export function createPlaza(): Plaza {
   });
   const shadowGeo = new THREE.PlaneGeometry(1.3, 0.62);
   const ringGeo = new THREE.RingGeometry(0.62, 0.78, 48);
-  const selRing = new THREE.Mesh(ringGeo, new THREE.MeshBasicMaterial({ color: '#ff6f97', transparent: true, opacity: 0.9, depthWrite: false }));
+  const selRing = new THREE.Mesh(ringGeo, new THREE.MeshBasicMaterial({ color: RING_COLOR, transparent: true, opacity: 0.9, depthWrite: false }));
   selRing.rotation.x = -Math.PI / 2; selRing.position.y = 0.03; selRing.scale.set(1, 0.6 / 0.78 * 0.78 * 1.0, 1);
   scene.add(selRing);
   const marker = new THREE.Mesh(new THREE.RingGeometry(0.2, 0.32, 32), new THREE.MeshBasicMaterial({ color: '#ffffff', transparent: true, opacity: 0, depthWrite: false }));
@@ -260,7 +300,11 @@ export function createPlaza(): Plaza {
   let markerT = 1;
 
   return {
-    scene, shadowTex, shadowGeo,
+    scene, shadowTex, shadowGeo, pedestals,
+    setRingColor(color) {
+      selRing.material.color.set(color ?? RING_COLOR);
+    },
+    setGuildLevel: drawBadge,
     toggleTime() {
       envTarget = envTarget === DAY ? DUSK : DAY;
       return envTarget === DAY;

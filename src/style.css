@@ -240,6 +240,63 @@ button:disabled:hover { background: var(--panel); }
 .toast-sub { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: 12px; font-weight: 700; color: var(--ink-soft); }
 .toast .toast-open { flex: 0 0 auto; padding: 8px 10px; font-size: 13px; box-shadow: none; background: #fff; }
 
+/* 交件後格子中間的作業成果 */
+.pie-swatch { stroke: #fff; stroke-width: 1.5; }
+.pie-photo-bg { fill: #fff; }
+.pie-result-ring { fill: none; stroke: #fff; stroke-width: 2.5; }
+.pie-result.is-button { cursor: pointer; outline: none; }
+.pie-result.is-button:focus-visible .pie-result-ring { stroke: var(--ink); stroke-width: 3; }
+
+/* OC 設定卡：OC 目前的部件 */
+.oc-parts { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 8px; margin-top: 12px; }
+.card .part-tile {
+  min-width: 0; display: grid; justify-items: center; gap: 4px; padding: 6px 5px 5px;
+  border-radius: 12px; border: 1px solid var(--panel-line); background: #fff; box-shadow: none;
+}
+.part-tile.is-empty { border-style: dashed; border-color: rgba(47, 37, 66, 0.22); background: transparent; }
+.part-thumb { width: 100%; height: 38px; display: flex; align-items: center; justify-content: center; overflow: hidden; border-radius: 8px; background: #f6f2fa; }
+.is-empty .part-thumb { background: transparent; }
+.part-thumb img { width: 100%; height: 100%; object-fit: cover; pointer-events: none; }
+.part-thumb.is-plate { background: #fff; border: 1px solid var(--panel-line); }
+.part-thumb.is-plate img { object-fit: contain; }
+.part-thumb.swatches { gap: 2px; padding: 0 3px; background: transparent; }
+.part-thumb .swatch { flex: 1 1 0; height: 26px; max-width: 14px; border-radius: 7px; border: 1px solid rgba(47, 37, 66, 0.18); }
+.part-name { font-size: 11px; font-weight: 700; color: var(--ink-soft); }
+
+/* 交件 */
+.submit-work { margin: -6px 0 12px; font-size: 13px; font-weight: 700; color: var(--ink-soft); overflow-wrap: anywhere; }
+.submit-pick { padding: 18px 14px; border-radius: 14px; border: 1px dashed rgba(47, 37, 66, 0.3); background: rgba(255, 255, 255, 0.6); text-align: center; }
+.submit-pick .hint { margin: 0 0 12px; font-size: 14px; color: var(--ink); }
+.pick-photos { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
+.pick-photo {
+  position: relative; display: grid; place-items: center; min-height: 52px; cursor: pointer;
+  border-radius: 12px; background: #fff; border: 1px solid var(--panel-line); font-size: 15px; font-weight: 700;
+}
+.pick-photo:has(input:focus-visible) { outline: 2px solid var(--accent); outline-offset: 2px; }
+.submit-photo { text-align: center; }
+.photo-frame { position: relative; display: inline-block; max-width: 100%; overflow: hidden; border-radius: 12px; vertical-align: top; }
+.photo-frame img { display: block; max-width: 100%; max-height: 40vh; pointer-events: none; }
+.photo-frame.is-cropping { touch-action: none; cursor: grab; }
+.photo-frame.is-cropping:active { cursor: grabbing; }
+.photo-frame:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+.crop-box {
+  position: absolute; border: 2px solid #fff; border-radius: 4px; pointer-events: none;
+  box-shadow: 0 0 0 1px var(--ink), 0 0 0 9999px rgba(30, 20, 45, 0.45);
+}
+.submit-part { margin-top: 10px; }
+.submit-part .field-label { margin: 0 0 6px; }
+.swatches { display: flex; gap: 6px; }
+.submit-part .swatch { width: 40px; height: 40px; border-radius: 50%; border: 2px solid #fff; box-shadow: 0 0 0 1px var(--panel-line); }
+.plate-size { display: flex; align-items: center; gap: 10px; margin-bottom: 8px; font-size: 13px; font-weight: 700; color: var(--ink-soft); }
+.plate-size input { flex: 1 1 auto; min-width: 0; accent-color: var(--accent); }
+.plate-preview { display: block; width: 180px; height: 60px; border-radius: 8px; border: 2px solid var(--ink); background: #fff; }
+.card .c-start.is-submit { color: #fff; background: var(--accent); border-color: transparent; font-weight: 700; }
+
+/* 放大看照片 */
+.viewer { margin: 0; text-align: center; }
+.viewer img { display: block; max-width: 100%; max-height: 62vh; margin: 0 auto; border-radius: 12px; object-fit: contain; }
+.viewer figcaption { margin-top: 10px; font-size: 13px; font-weight: 700; color: var(--ink-soft); overflow-wrap: anywhere; }
+
 /* 剛完成的那一片：0.7 秒點亮 */
 @keyframes light-up {
   0% { transform: scale(0.4); opacity: 0.2; }

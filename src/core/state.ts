@@ -3,6 +3,7 @@
 // 它會先讀最新的存檔再套用，所以開兩個分頁也不會拿舊資料蓋掉新進度。
 import { newId } from './id';
 import { STATE_KEY, type KV } from './storage';
+import { EXTEND_MINUTES, extendTimer, finishTimer, pauseTimer, resumeTimer, startTimer } from './timer';
 import type { Commission, CourseType, GuildState, Level, OCProfile } from './types';
 
 export const STATE_VERSION = 1;
@@ -51,16 +52,66 @@ export function addCommission(s: GuildState, draft: CommissionDraft, now = Date.
   return { ...s, commissions: [...s.commissions, commission] };
 }
 
-/** 完成一個計時關卡。已經完成的不會再算一次（回傳原本的狀態）。交件關不能用這個。 */
-export function completeLevel(s: GuildState, commissionId: string, levelId: string, now = Date.now()): GuildState {
-  const c = s.commissions.find((x) => x.id === commissionId);
-  if (!c) throw new Error(`找不到委託 ${commissionId}`);
-  const level = c.levels.find((l) => l.id === levelId);
+/** 找委託和裡面的某一關；找不到就丟錯 */
+export function findLevel(s: GuildState, commissionId: string, levelId: string): { commission: Commission; level: Level } {
+  const commission = s.commissions.find((x) => x.id === commissionId);
+  if (!commission) throw new Error(`找不到委託 ${commissionId}`);
+  const level = commission.levels.find((l) => l.id === levelId);
   if (!level) throw new Error(`找不到關卡 ${levelId}`);
+  return { commission, level };
+}
+
+/** 把 fn 套用到某一關；fn 回傳原本那個物件代表沒變，整個狀態也原樣回傳 */
+function mapLevel(s: GuildState, commissionId: string, levelId: string, fn: (l: Level) => Level): GuildState {
+  const { commission, level } = findLevel(s, commissionId, levelId);
+  const next = fn(level);
+  if (next === level) return s;
+  const levels = commission.levels.map((l) => (l === level ? next : l));
+  return { ...s, commissions: s.commissions.map((x) => (x === commission ? { ...commission, levels } : x)) };
+}
+
+/** 同時只跑一個任務：把其他正在跑的任務先暫停 */
+function pauseOthers(s: GuildState, exceptLevelId: string, now: number): GuildState {
+  let changed = false;
+  const commissions = s.commissions.map((c) => {
+    if (!c.levels.some((l) => l.id !== exceptLevelId && l.status === 'doing' && l.pausedAt === undefined)) return c;
+    changed = true;
+    return { ...c, levels: c.levels.map((l) => (l.id !== exceptLevelId ? pauseTimer(l, now) : l)) };
+  });
+  return changed ? { ...s, commissions } : s;
+}
+
+const timedOnly = (level: Level): void => {
   if (level.kind !== 'timed') throw new Error('交件關要走交件流程');
-  if (level.status === 'done') return s;
-  const levels = c.levels.map((l): Level => (l === level ? { ...l, status: 'done', doneAt: now } : l));
-  return { ...s, commissions: s.commissions.map((x) => (x === c ? { ...c, levels } : x)) };
+};
+
+/** 開始一個計時任務（其他正在跑的會先暫停）。已經開始或完成的不會重來。 */
+export function startLevel(s: GuildState, commissionId: string, levelId: string, now = Date.now()): GuildState {
+  const { level } = findLevel(s, commissionId, levelId);
+  timedOnly(level);
+  if (level.status !== 'todo') return s;
+  return mapLevel(pauseOthers(s, levelId, now), commissionId, levelId, (l) => startTimer(l, now));
+}
+
+export function pauseLevel(s: GuildState, commissionId: string, levelId: string, now = Date.now()): GuildState {
+  return mapLevel(s, commissionId, levelId, (l) => pauseTimer(l, now));
+}
+
+/** 繼續暫停中的任務（其他正在跑的會先暫停） */
+export function resumeLevel(s: GuildState, commissionId: string, levelId: string, now = Date.now()): GuildState {
+  const { level } = findLevel(s, commissionId, levelId);
+  if (level.status !== 'doing' || level.pausedAt === undefined) return s;
+  return mapLevel(pauseOthers(s, levelId, now), commissionId, levelId, (l) => resumeTimer(l, now));
+}
+
+export function extendLevel(s: GuildState, commissionId: string, levelId: string, now = Date.now(), minutes = EXTEND_MINUTES): GuildState {
+  return mapLevel(s, commissionId, levelId, (l) => extendTimer(l, now, minutes));
+}
+
+/** 完成一個計時任務（記下專注時間）。已經完成的不會再算一次（回傳原本的狀態）。交件關不能用這個。 */
+export function completeLevel(s: GuildState, commissionId: string, levelId: string, now = Date.now()): GuildState {
+  timedOnly(findLevel(s, commissionId, levelId).level);
+  return mapLevel(s, commissionId, levelId, (l) => finishTimer(l, now));
 }
 
 // ---------------------------------------------------------------- 查詢
@@ -85,6 +136,20 @@ export function completedCommissions(s: GuildState): Commission[] {
 
 /** 下一個要做的關卡（第一個還沒完成的）；全部完成回傳 null */
 export const nextLevel = (c: Commission): Level | null => c.levels.find((l) => l.status !== 'done') ?? null;
+
+/** 正在做的任務：正在跑（含時間到）的優先，其次是最近暫停的；都沒有回傳 null */
+export function currentWork(s: GuildState): { commission: Commission; level: Level } | null {
+  let best: { commission: Commission; level: Level } | null = null;
+  let bestKey = -Infinity;
+  for (const commission of s.commissions) {
+    for (const level of commission.levels) {
+      if (level.status !== 'doing') continue;
+      const key = level.pausedAt ?? Infinity;
+      if (key > bestKey) { best = { commission, level }; bestKey = key; }
+    }
+  }
+  return best;
+}
 
 // ---------------------------------------------------------------- 讀寫存檔
 

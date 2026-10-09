@@ -148,6 +148,35 @@ button:disabled:hover { background: var(--panel); }
 .level-note { font-size: 12px; color: var(--ink-soft); }
 .form-actions { display: grid; grid-template-columns: 2fr 1fr; gap: 8px; align-items: end; }
 .form-actions .primary, .form-actions .secondary { margin-top: 0; }
+
+/* 任務計時：上下兩塊面板，中間透明，看得到主角在委託板前工作 */
+.timer-layer {
+  position: fixed; inset: 0; z-index: 10; display: flex; flex-direction: column; justify-content: space-between; gap: 12px;
+  padding: max(14px, env(safe-area-inset-top)) max(16px, env(safe-area-inset-right))
+    max(16px, env(safe-area-inset-bottom)) max(16px, env(safe-area-inset-left));
+  background: linear-gradient(to bottom, rgba(47, 37, 66, 0.3), rgba(47, 37, 66, 0) 38%, rgba(47, 37, 66, 0) 62%, rgba(47, 37, 66, 0.3));
+}
+.timer-top, .timer-bottom { width: 100%; max-width: 420px; margin: 0 auto; padding: 14px 16px; background: rgba(255, 255, 255, 0.92); }
+.t-head { display: flex; align-items: center; justify-content: space-between; gap: 8px; }
+.t-course { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: 12px; font-weight: 700; color: var(--ink-soft); }
+.t-title { margin: 2px 0 0; font-size: 19px; outline: none; overflow-wrap: anywhere; }
+.t-step { margin-top: 2px; font-size: 12px; color: var(--ink-soft); }
+.t-clock {
+  margin-top: 4px; text-align: center; font-size: 76px; font-weight: 800; line-height: 1.1;
+  letter-spacing: 0.02em; font-variant-numeric: tabular-nums;
+}
+.timer-layer[data-phase="paused"] .t-clock { color: #b9b0c6; }
+.timer-layer[data-phase="expired"] .t-clock { color: var(--accent); }
+.t-status { min-height: 1.4em; text-align: center; font-size: 14px; font-weight: 700; color: var(--ink-soft); }
+.timer-layer[data-phase="expired"] .t-status { color: var(--accent); }
+.t-ask { margin: 0 0 10px; text-align: center; font-size: 17px; font-weight: 700; }
+.t-actions { display: grid; grid-auto-flow: column; grid-auto-columns: 1fr; gap: 8px; }
+.timer-bottom .t-actions button { min-height: 50px; padding: 8px 6px; font-size: 15px; box-shadow: none; background: #fff; }
+.timer-bottom .t-actions .primary { color: #fff; background: var(--accent); border-color: transparent; font-weight: 700; }
+.timer-bottom .t-actions button:disabled { opacity: 0.55; }
+.timer-bottom .card-msg { min-height: 0; text-align: center; }
+.ghost { flex: 0 0 auto; padding: 6px 10px; font-size: 13px; box-shadow: none; background: transparent; border-color: transparent; color: var(--ink-soft); }
+.ghost:hover { background: rgba(47, 37, 66, 0.06); }
 @media (max-width: 640px) {
   .title p { display: none; }
   .title h1 { font-size: 15px; }

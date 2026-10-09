@@ -12,6 +12,7 @@ export interface Level {
   pausedMs: number;           // 累計暫停
   focusMs: number;            // 實際專注時間
   doneAt?: number;
+  pausedAt?: number;          // 正在暫停的話，是從什麼時候開始暫停（T4 加的，7.2 沒有；沒有這欄就是沒暫停）
 }
 
 export interface Commission {

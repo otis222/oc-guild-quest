@@ -7,6 +7,8 @@ export const COPY = {
     hello: '跟夥伴打招呼',
     toDusk: '等到黃昏',
     toDay: '等到天亮',
+    /** 大廳招牌旁等級牌上的字 */
+    guildLevel: '公會等級',
   },
 
   /** 第一次進入：建立 OC */
@@ -105,14 +107,50 @@ export const COPY = {
     pieLabel: (course: string, work: string, done: number, total: number) => `${course}・${work}，${done}/${total}`,
     history: (n: number) => `歷史（${n}）`,
     historyItem: (work: string, done: number, total: number, submitted: boolean) => `${work}　${done}/${total}${submitted ? '・已交件' : ''}`,
+    /** OC 目前的部件（名牌、配色、版面、草稿）；還沒有的格子 */
+    partsAria: 'OC 的部件',
+    partEmpty: '還沒有',
+    /** 交件的格子中間：點了放大看照片 */
+    openResult: (work: string) => `看「${work}」交的作業`,
   },
 
-  /** 完成任務後大廳的小提示 */
+  /** 完成任務、交件後大廳的小提示 */
   toast: {
     lit: '設定卡亮了一片',
     detail: (course: string, work: string, done: number, total: number) => `${course}・${work}　${done}/${total}`,
+    submitted: '交件完成',
+    submittedDetail: (work: string, level: number) => `公會等級 ${level}・${work}`,
     /** 企劃表 7.7 的按鈕範例 */
     open: '看 OC 設定卡',
+  },
+
+  /** 交件 */
+  submit: {
+    title: '交件',
+    hint: '拍下完成的作業，交給公會。',
+    camera: '拍照',
+    album: '從相簿選',
+    processing: '整理照片中…',
+    photoAlt: (work: string) => `「${work}」的作業照片`,
+    paletteLabel: 'OC 的新配色',
+    nameplateLabel: '拖曳框框，框出你的名牌',
+    nameplateSize: '框的大小',
+    nameplatePreview: '名牌預覽',
+    layoutNote: '這張照片會變成設定卡上的版面縮圖。',
+    sketchNote: '這張照片會放進設定卡的草稿格。',
+    confirm: '交件',
+    confirming: '交件中…',
+    retake: '換一張',
+    note: '照片只存在這個瀏覽器，不會上傳。',
+    badImage: '這張照片讀不出來，換一張試試。',
+    saveFailed: '交件沒成功，再按一次。',
+  },
+
+  /** 放大看照片 */
+  viewer: {
+    exhibit: '公會展品',
+    work: '交件的作業',
+    caption: (course: string, work: string, md: string) => `${course}・${work}　${md} 交件`,
   },
 
   /** 換造型 */
@@ -128,6 +166,8 @@ export const COPY = {
   /** 主角頭上的對話泡泡 */
   speech: {
     taskDone: '任務完成！',
+    /** 企劃表 7.7 的台詞範例 */
+    submitted: '交件了！',
   },
 
   dialog: {

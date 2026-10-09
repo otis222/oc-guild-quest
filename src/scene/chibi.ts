@@ -44,6 +44,9 @@ export interface RingValue {
 const RING_ON = 0xff6f97;
 const RING_DIM = 0xb9b0c6;
 const RING_TRACK = 0xece6f2;
+/** 頭上名牌圖的高度、最大寬度（像素，跟名字標籤一起縮放） */
+const PLATE_H = 26;
+const PLATE_MAX_W = 110;
 
 const tmpV = new THREE.Vector3(), tmpV2 = new THREE.Vector3();
 
@@ -69,6 +72,8 @@ export class Chibi {
   readonly label: Text;
   bubble: Container | null = null;
   bubbleT = 0;
+  /** 頭上的名牌圖（字體設計交件後換上）；有名牌時不顯示名字文字 */
+  private plate: Container | null = null;
   /** 頭上的進度環（計時中才有） */
   private ring: Graphics | null = null;
   private ringValue: RingValue | null = null;
@@ -114,6 +119,33 @@ export class Chibi {
   /** 換圖（換造型）；大小會照新圖的高度自動算 */
   setTexture(tex: Texture): void {
     this.sprite.texture = tex;
+  }
+
+  /** 頭上的名字換成名牌圖；傳 null 換回名字文字 */
+  setNameplate(tex: Texture | null): void {
+    if (this.plate) {
+      this.view.removeChild(this.plate);
+      this.plate.destroy({ children: true });
+      this.plate = null;
+    }
+    this.label.visible = !tex;
+    if (!tex) return;
+    const h = PLATE_H, w = Math.min(PLATE_MAX_W, (tex.width / tex.height) * h);
+    const plate = new Container();
+    // 白底卡片＋描邊，底邊對齊名字標籤原本的位置
+    const card = new Graphics().roundRect(-w / 2 - 3, -h - 6, w + 6, h + 6, 6).fill(0xffffff).stroke({ width: 2, color: INK });
+    const sprite = new Sprite(tex);
+    sprite.anchor.set(0.5, 1);
+    sprite.width = w; sprite.height = h;
+    sprite.position.set(0, -3);
+    plate.addChild(card, sprite);
+    this.plate = plate;
+    this.view.addChild(plate);
+  }
+
+  /** 頭上的名字標籤（名牌圖或名字文字） */
+  private get tag(): Container {
+    return this.plate ?? this.label;
   }
 
   /** 顯示或拿掉頭上的進度環 */
@@ -227,15 +259,19 @@ export class Chibi {
     this.sprite.position.set(0, -lift);
     this.sprite.scale.set(base * sx * this.flip, base * sy);
     this.sprite.rotation = rot;
-    this.label.position.set(0, -pxH - lift - 4);
-    this.label.alpha = isSelected ? 1 : 0.82;
-    this.label.scale.set(clamp(pxH / 150, 0.75, 1.15));
-    // 進度環畫在名字上面；有進度環時，對話泡泡往上移到進度環上面
-    let headTop = -pxH - lift;
+    const tag = this.tag, tagScale = clamp(pxH / 150, 0.75, 1.15);
+    for (const t of [this.label, this.plate]) {
+      if (!t) continue;
+      t.position.set(0, -pxH - lift - 4);
+      t.alpha = isSelected ? 1 : 0.82;
+      t.scale.set(tagScale);
+    }
+    // 進度環畫在名字上面；有進度環時，對話泡泡往上移到進度環上面。名牌比名字高，泡泡也跟著往上
+    let headTop = -pxH - lift - (this.plate ? this.plate.height - this.label.height : 0);
     if (this.ringValue) {
       if (!this.ring) { this.ring = new Graphics(); this.view.addChild(this.ring); }
       const k = clamp(pxH / 150, 0.8, 1.2), r = 11 * k;
-      const y = -pxH - lift - 4 - this.label.height - r - 3;
+      const y = -pxH - lift - 4 - tag.height - r - 3;
       const f = clamp(this.ringValue.fraction, 0, 1);
       this.ring.clear();
       this.ring.circle(0, 0, r).fill(0xffffff).stroke({ width: 2, color: INK });

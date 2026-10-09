@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest';
 import { createActions } from '../../src/core/actions';
 import { loadEvents } from '../../src/core/events';
 import { createGuildState, currentWork, findLevel, loadState, saveState, timedProgress } from '../../src/core/state';
+import { getPhoto } from '../../src/core/storage';
 import { createGuildStore } from '../../src/core/store';
 import { templateLevels } from '../../src/core/templates';
 import { remainingMs, timerPhase } from '../../src/core/timer';
@@ -139,5 +140,61 @@ describe('委託與任務的操作', () => {
   it('交件關不能用計時操作', async () => {
     const { actions, cId, levelIds } = await setup();
     await expect(actions.startLevel(cId, levelIds[5])).rejects.toThrow();
+  });
+});
+
+describe('交件與展品', () => {
+  const jpeg = (text: string): Blob => new Blob([text], { type: 'image/jpeg' });
+  const photoKeys = (kv: { raw: Map<string, unknown> }): string[] => [...kv.raw.keys()].filter((k) => k.startsWith('photo:'));
+
+  it('交件：照片存進 IndexedDB，委託交件、OC 換配色、展台放上照片、公會等級 2，記 photo_added 和 commission_submitted', async () => {
+    const { actions, cId, store, kv, clock } = await setup();
+    expect(await actions.submitCommission(cId, { photo: jpeg('photo'), palette: ['#e5484d'] })).toBe(true);
+    const s = (await loadState(kv))!;
+    const c = s.commissions[0];
+    expect(c.submittedAt).toBe(clock.now);
+    expect(await (await getPhoto(kv, c.photoId!))?.text()).toBe('photo');
+    expect(s.oc.palette).toEqual(['#e5484d']);
+    expect(s.exhibits).toEqual([c.photoId]);
+    expect(s.guildLevel).toBe(2);
+    expect(store.state).toEqual(s);
+    const events = (await loadEvents(kv)).slice(-2);
+    expect(events.map((e) => e.type)).toEqual(['photo_added', 'commission_submitted']);
+    expect(events[0]).toMatchObject({ commissionId: cId, data: { photoId: c.photoId, bytes: 5 } });
+    expect(events[1]).toMatchObject({
+      commissionId: cId, data: { photoId: c.photoId, part: 'palette', beforeDueMs: 9_000_000 - clock.now, guildLevel: 2 },
+    });
+  });
+
+  it('名牌：裁好的名牌圖另外存一張', async () => {
+    const { actions, store, kv, draft } = await setup();
+    const id = await actions.createCommission({ ...draft, course: 'typography' });
+    await actions.submitCommission(id, { photo: jpeg('photo'), nameplate: jpeg('plate') });
+    const c = store.state.commissions.find((x) => x.id === id)!;
+    expect(await (await getPhoto(kv, c.nameplatePhotoId!))?.text()).toBe('plate');
+    expect(store.state.oc.nameplatePhotoId).toBe(c.nameplatePhotoId);
+  });
+
+  it('已經交過了：回傳 false，剛存的照片刪掉，事件不重記', async () => {
+    const { actions, cId, kv, types } = await setup();
+    await actions.submitCommission(cId, { photo: jpeg('a'), palette: ['#e5484d'] });
+    const before = photoKeys(kv);
+    expect(await actions.submitCommission(cId, { photo: jpeg('b'), palette: ['#2bb3a3'] })).toBe(false);
+    expect(photoKeys(kv)).toEqual(before);
+    expect((await types()).filter((t) => t === 'commission_submitted')).toHaveLength(1);
+  });
+
+  it('存檔失敗（例如配色沒有顏色）：丟錯，剛存的照片也刪掉', async () => {
+    const { actions, cId, kv, store } = await setup();
+    await expect(actions.submitCommission(cId, { photo: jpeg('a') })).rejects.toThrow();
+    expect(photoKeys(kv)).toEqual([]);
+    expect(store.state.commissions[0].submittedAt).toBeUndefined();
+  });
+
+  it('點展品記 exhibit_opened，帶著是哪張委託', async () => {
+    const { actions, cId, store, kv } = await setup();
+    await actions.submitCommission(cId, { photo: jpeg('a'), palette: ['#e5484d'] });
+    await actions.noteExhibitOpened(0, store.state.exhibits[0]);
+    expect((await loadEvents(kv)).at(-1)).toMatchObject({ type: 'exhibit_opened', commissionId: cId, data: { slot: 0 } });
   });
 });

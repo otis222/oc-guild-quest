@@ -39,16 +39,19 @@ export interface Commission {
   levels: Level[];            // 5 個 timed＋1 個 submit
   submittedAt?: number;
   photoId?: string;           // 交件照片
+  palette?: string[];         // 部位是配色：交件照片抽出的色（T6 加的，7.2 沒有）
+  nameplatePhotoId?: string;  // 部位是名牌：從交件照片裁出來的名牌圖（T6 加的，7.2 沒有）
   cellIndex: number;          // 佔設定卡該區的第幾格（0–2，滿了往下一輪）
 }
 
 export interface OCProfile {
   name: string;
   sprite: string;             // 選的 AI 小人檔名（例：maid_1.png），或上傳圖的 id（upload:<id>）
-  palette?: string[];         // 色彩學交件後的 5 個色
-  nameplatePhotoId?: string;  // 字體設計
-  layoutPhotoId?: string;     // 平面構成
-  sketchPhotoId?: string;     // 手繪基礎
+  // 下面 4 個是 OC 目前的部件：部位一樣的課程（內建或自訂）最近一次交件的成果
+  palette?: string[];         // 配色（色彩學）：照片抽出的色，最多 5 個
+  nameplatePhotoId?: string;  // 名牌（字體設計）
+  layoutPhotoId?: string;     // 版面（平面構成）
+  sketchPhotoId?: string;     // 草稿（手繪基礎）
 }
 
 export interface GuildState {
@@ -57,7 +60,7 @@ export interface GuildState {
   oc: OCProfile;
   commissions: Commission[];
   guildLevel: number;
-  exhibits: string[];         // 展品照片 id，最近 5 張
+  exhibits: string[];         // 展品照片 id，最近 5 張；第 i 張放在第 i 個展品位置（submit.ts、scene/exhibits.ts）
   customCourses: CustomCourse[]; // 自訂課程，照建立順序（第 2 版加的）
 }
 

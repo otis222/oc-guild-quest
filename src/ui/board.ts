@@ -23,6 +23,8 @@ export interface BoardDeps {
   createCommission(draft: CommissionDraft): Promise<unknown>;
   /** 開始任務或回到正在做的任務（打開計時畫面，委託板會被換掉） */
   openTask(commissionId: string, levelId: string): void;
+  /** 任務都做完了：打開交件畫面（委託板會被換掉） */
+  openSubmit(commissionId: string): void;
 }
 
 /** 開著的時候多久更新一次倒數 */
@@ -42,7 +44,7 @@ export function openBoard(deps: BoardDeps): void {
     dialog.setTitle(T.title);
     const s = deps.store.state, now = Date.now();
     const active = activeCommissions(s), done = completedCommissions(s);
-    const card = (c: Commission): HTMLLIElement => commissionCard(c, courseInfo(s, c.course).label, now, deps.openTask);
+    const card = (c: Commission): HTMLLIElement => commissionCard(c, courseInfo(s, c.course).label, now, deps);
     dialog.body.replaceChildren(
       on(el('button', { type: 'button', class: 'primary' }, T.newCommission), 'click', showForm),
       el('h3', { class: 'section-title' }, T.active(active.length)),
@@ -66,14 +68,14 @@ export function openBoard(deps: BoardDeps): void {
   }
 }
 
-/** 委託卡右下角的按鈕：開始任務、回到任務；交件在 T6 才有作用，先停用 */
-function taskButton(c: Commission, next: Level, openTask: BoardDeps['openTask']): HTMLButtonElement {
-  if (next.kind !== 'timed') return el('button', { type: 'button', class: 'c-start', disabled: true }, T.submit);
+/** 委託卡右下角的按鈕：開始任務、回到任務；任務都做完了就是交件 */
+function taskButton(c: Commission, next: Level, deps: BoardDeps): HTMLButtonElement {
+  if (next.kind !== 'timed') return on(el('button', { type: 'button', class: 'c-start is-submit' }, T.submit), 'click', () => deps.openSubmit(c.id));
   const label = next.status === 'doing' ? T.resume : T.start(next.minutes);
-  return on(el('button', { type: 'button', class: 'c-start' }, label), 'click', () => openTask(c.id, next.id));
+  return on(el('button', { type: 'button', class: 'c-start' }, label), 'click', () => deps.openTask(c.id, next.id));
 }
 
-function commissionCard(c: Commission, course: string, now: number, openTask: BoardDeps['openTask']): HTMLLIElement {
+function commissionCard(c: Commission, course: string, now: number, deps: BoardDeps): HTMLLIElement {
   const { done, total } = timedProgress(c);
   const submitted = isSubmitted(c);
   const overdue = !submitted && isOverdue(c.dueAt, now);
@@ -87,7 +89,7 @@ function commissionCard(c: Commission, course: string, now: number, openTask: Bo
     el('div', { class: 'c-title' }, c.title),
     el('div', { class: 'c-row' },
       el('span', { class: 'c-progress', 'aria-label': T.progress(done, total) }, segs, `${done}/${total}`),
-      !submitted && next ? taskButton(c, next, openTask) : null),
+      !submitted && next ? taskButton(c, next, deps) : null),
   );
 }
 

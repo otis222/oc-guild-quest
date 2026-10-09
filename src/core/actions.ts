@@ -1,14 +1,26 @@
 // 玩家的操作：改狀態 → 存檔 → 記事件（企劃表 7.6）。
 // 事件只在狀態真的有變時才記：連按兩次「完成」、或兩個分頁都按，也只記一次、只點亮一片。
+import { courseInfo } from './courses';
 import { logEvent, type EventFields } from './events';
 import { newId } from './id';
 import {
   addCommission, completeLevel, extendLevel, findCommission, findLevel, pauseLevel, resumeLevel, startLevel, type CommissionDraft,
 } from './state';
-import type { KV } from './storage';
+import { deletePhoto, putPhoto, type KV } from './storage';
 import type { GuildStore } from './store';
+import { commissionOfPhoto, submitCommission } from './submit';
 import { EXTEND_MINUTES, timerPhase } from './timer';
 import type { EventType, GuildState, Level } from './types';
+
+/** 交件要存的東西（照片已經在瀏覽器裡縮好） */
+export interface SubmitInput {
+  /** 交件照片（長邊 1024px 的 JPEG） */
+  photo: Blob;
+  /** 部位是配色：抽出的色 */
+  palette?: readonly string[];
+  /** 部位是名牌：裁好的名牌圖 */
+  nameplate?: Blob;
+}
 
 export interface Actions {
   /** 接新委託（委託單上新加的課程一起建立），回傳委託 id */
@@ -23,6 +35,13 @@ export interface Actions {
   changeOcSprite(sprite: string): Promise<boolean>;
   /** 玩家自己打開 OC 設定卡（完成任務後自動跳出來的不算） */
   noteOcCardOpened(via: string): Promise<void>;
+  /**
+   * 交件：照片先存進 IndexedDB，再改存檔、記事件。回傳有沒有交成功；
+   * 已經交過了（例如另一個分頁先交）就把剛存的照片刪掉、回傳 false。存檔失敗也會刪掉照片再丟錯。
+   */
+  submitCommission(commissionId: string, input: SubmitInput): Promise<boolean>;
+  /** 點大廳展台上的展品（放大看） */
+  noteExhibitOpened(slot: number, photoId: string): Promise<void>;
 }
 
 type LevelOp = (s: GuildState, commissionId: string, levelId: string, now: number) => GuildState;
@@ -108,6 +127,34 @@ export function createActions(kv: KV, store: GuildStore, clock: () => number = D
 
     async noteOcCardOpened(via) {
       await log('oc_card_opened', { data: { via } }, clock());
+    },
+
+    async submitCommission(cId, input) {
+      const now = clock();
+      const photoId = await putPhoto(kv, input.photo);
+      const nameplatePhotoId = input.nameplate ? await putPhoto(kv, input.nameplate) : undefined;
+      const discard = (): Promise<unknown> => Promise.all([photoId, nameplatePhotoId].map((id) => (id ? deletePhoto(kv, id) : null)))
+        .catch((err: unknown) => console.warn('刪掉沒用到的照片失敗', err));
+      let changed: { before: GuildState; after: GuildState };
+      try {
+        changed = await apply((s) => submitCommission(s, cId, { photoId, palette: input.palette, nameplatePhotoId }, now));
+      } catch (err) {
+        await discard();
+        throw err;
+      }
+      if (changed.before === changed.after) { await discard(); return false; }
+      const c = findCommission(changed.after, cId);
+      await log('photo_added', { commissionId: cId, data: { photoId, bytes: input.photo.size } }, now);
+      await log('commission_submitted', {
+        commissionId: cId,
+        data: { photoId, part: courseInfo(changed.after, c.course).part, beforeDueMs: c.dueAt - now, guildLevel: changed.after.guildLevel },
+      }, now);
+      return true;
+    },
+
+    async noteExhibitOpened(slot, photoId) {
+      const c = commissionOfPhoto(store.state, photoId);
+      await log('exhibit_opened', { ...(c ? { commissionId: c.id } : {}), data: { slot, photoId } }, clock());
     },
   };
 }

@@ -20,7 +20,7 @@ export interface KV {
    * 開了兩個分頁同時寫，也不會互相蓋掉。fn 必須是同步函式；fn 丟錯就什麼都不寫。
    */
   update<T>(key: string, fn: (old: T | undefined) => T): Promise<T>;
-  /** 刪掉一個 key（目前只用在換造型時刪掉舊的上傳圖） */
+  /** 刪掉一個 key（換造型時刪掉舊的上傳圖、交件沒存成功時刪掉剛存的照片） */
   del(key: string): Promise<void>;
 }
 

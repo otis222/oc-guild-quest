@@ -48,7 +48,8 @@ export interface GuildState {
 export type EventType =
   | 'app_opened' | 'oc_created' | 'commission_created' | 'level_started'
   | 'level_paused' | 'level_resumed' | 'level_extended' | 'level_completed'
-  | 'photo_added' | 'commission_submitted' | 'oc_card_opened' | 'exhibit_opened';
+  | 'photo_added' | 'commission_submitted' | 'oc_card_opened' | 'exhibit_opened'
+  | 'oc_changed';              // T5 加的：在設定卡換造型（7.2 沒有）
 
 export interface LogEvent {
   t: number;

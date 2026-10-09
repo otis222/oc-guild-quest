@@ -10,6 +10,8 @@ export interface HudHandlers {
 export interface Hud {
   /** 接上「委託板」按鈕（接上之前按鈕是停用的） */
   onBoard(fn: () => void): void;
+  /** 接上「OC 設定卡」按鈕 */
+  onCard(fn: () => void): void;
   hideLoading(): void;
   /** 載入畫面改成顯示錯誤訊息，不關掉 */
   showError(text: string): void;
@@ -33,10 +35,15 @@ export function createHud(h: HudHandlers): Hud {
 
   const loading = $('loading');
   const btnBoard = $<HTMLButtonElement>('btnBoard');
+  const btnCard = $<HTMLButtonElement>('btnCard');
   return {
     onBoard(fn) {
       btnBoard.addEventListener('click', fn);
       btnBoard.disabled = false;
+    },
+    onCard(fn) {
+      btnCard.addEventListener('click', fn);
+      btnCard.disabled = false;
     },
     hideLoading() {
       loading.classList.add('hide');

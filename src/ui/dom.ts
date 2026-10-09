@@ -14,3 +14,11 @@ export function el<K extends keyof HTMLElementTagNameMap>(
   for (const c of children) if (c !== null && c !== undefined && c !== false) e.append(c);
   return e;
 }
+
+/** 加上事件後回傳元素本身，方便直接放進 el() 的 children */
+export function on<T extends HTMLElement, K extends keyof HTMLElementEventMap>(
+  target: T, type: K, fn: (ev: HTMLElementEventMap[K]) => void,
+): T {
+  target.addEventListener(type, fn);
+  return target;
+}

@@ -6,10 +6,11 @@ import type { Viewport } from './viewport';
 
 const MOVE_KEYS = ['w', 'a', 's', 'd', 'arrowup', 'arrowdown', 'arrowleft', 'arrowright'];
 
-/** 正在輸入框裡打字（含中文選字）時，按鍵不能拿去走路 */
+/** 正在輸入框裡打字（含中文選字）、或在對話框裡操作時，按鍵不能拿去走路 */
 function isTyping(e: KeyboardEvent): boolean {
   const t = e.target;
-  return e.isComposing || (t instanceof HTMLElement && (t.isContentEditable || ['INPUT', 'TEXTAREA', 'SELECT'].includes(t.tagName)));
+  return e.isComposing || (t instanceof HTMLElement
+    && (t.isContentEditable || ['INPUT', 'TEXTAREA', 'SELECT'].includes(t.tagName) || t.closest('[role="dialog"]') !== null));
 }
 
 interface Drag { x: number; y: number; sx: number; sy: number; moved: boolean }

@@ -63,6 +63,29 @@ export function completeLevel(s: GuildState, commissionId: string, levelId: stri
   return { ...s, commissions: s.commissions.map((x) => (x === c ? { ...c, levels } : x)) };
 }
 
+// ---------------------------------------------------------------- 查詢
+
+/** 計時關卡完成了幾個、總共幾個（委託卡上的 x/5） */
+export function timedProgress(c: Commission): { done: number; total: number } {
+  const timed = c.levels.filter((l) => l.kind === 'timed');
+  return { done: timed.filter((l) => l.status === 'done').length, total: timed.length };
+}
+
+export const isSubmitted = (c: Commission): boolean => c.submittedAt !== undefined;
+
+/** 進行中（還沒交件，逾期的也算）：截止早的排前面 */
+export function activeCommissions(s: GuildState): Commission[] {
+  return s.commissions.filter((c) => !isSubmitted(c)).sort((a, b) => a.dueAt - b.dueAt);
+}
+
+/** 已完成（交件了）：最近交的排前面 */
+export function completedCommissions(s: GuildState): Commission[] {
+  return s.commissions.filter(isSubmitted).sort((a, b) => (b.submittedAt ?? 0) - (a.submittedAt ?? 0));
+}
+
+/** 下一個要做的關卡（第一個還沒完成的）；全部完成回傳 null */
+export const nextLevel = (c: Commission): Level | null => c.levels.find((l) => l.status !== 'done') ?? null;
+
 // ---------------------------------------------------------------- 讀寫存檔
 
 /** 讀存檔：沒有存檔回傳 null。存檔壞了或比程式新會丟錯，這時不要拿新的狀態蓋掉它。 */

@@ -21,8 +21,10 @@ export interface Lobby {
   readonly player: Chibi | null;
   /** 放進主角和公會成員（只呼叫一次），回傳主角 */
   populate(player: CharacterSpec, members: readonly CharacterSpec[]): Chibi;
-  /** 點到小人：那隻跳一下說話（選取不變，永遠是主角）；點到地板：主角走過去 */
-  tap(x: number, y: number): void;
+  /** 有點到小人就讓那隻跳一下說話（選取不變，永遠是主角），回傳有沒有點到 */
+  pokeAt(x: number, y: number): boolean;
+  /** 主角走到點的地板位置（點到廣場外面就不動） */
+  walkTo(x: number, y: number): void;
   helloAll(): void;
   update(dt: number, t: number, keyDir: Vector3): void;
 }
@@ -44,10 +46,15 @@ export function createLobby(world: ChibiWorld, plaza: Plaza): Lobby {
       return me;
     },
 
-    tap(x, y) {
-      if (!player) return;
+    pokeAt(x, y) {
       const hits = all.filter((c) => c.hit(x, y)).sort((a, b) => b.view.zIndex - a.view.zIndex);
-      if (hits.length) { hits[0].hop(); hits[0].say(pick(POKED)); return; }
+      if (!hits.length) return false;
+      hits[0].hop(); hits[0].say(pick(POKED));
+      return true;
+    },
+
+    walkTo(x, y) {
+      if (!player) return;
       const p = world.rig.floorPoint(x, y);
       if (!p) return;
       const r = Math.hypot(p.x, p.z);

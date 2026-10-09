@@ -1,6 +1,6 @@
 // 畫面上的文字都放這裡。口吻：公會冒險者（不要像客服或 AI）；句子短、直接、不用驚嘆號。
 // 要改用詞，改這個檔就好。
-// 課程名稱和預設任務名稱在 src/core/templates.ts。
+// 課程名稱、部位名稱（名牌、配色…）和預設任務名稱在 src/core/templates.ts。
 
 export const COPY = {
   hud: {
@@ -45,6 +45,10 @@ export const COPY = {
   form: {
     title: '填委託單',
     course: '課程',
+    newCourse: '＋ 新課程',
+    courseName: '課程名稱',
+    courseNamePlaceholder: (max: number) => `最多 ${max} 個字`,
+    coursePart: '交件後解鎖',
     workTitle: '作業名稱',
     workPlaceholder: (max: number) => `最多 ${max} 個字`,
     due: '期限',
@@ -63,6 +67,9 @@ export const COPY = {
     saveFailed: '委託單沒貼上去，再按一次。',
     problems: {
       course: '還沒選課程。',
+      courseName: '新課程還沒取名字。',
+      courseTaken: '公會已經有這門課了，直接從上面選。',
+      coursePart: '還沒選交件後要解鎖什麼。',
       title: '委託單上還沒寫作業名稱。',
       due: '還沒定期限。',
       taskTitle: '有任務還沒取名字。',

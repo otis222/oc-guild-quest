@@ -1,13 +1,19 @@
 // 設定卡上的一格：圓形切成任務數那麼多片，亮的片用該課程的顏色；中間寫 x/5，交件後換成作業成果（T6 前先寫部位名稱）。
 // OC 設定卡和大廳的小提示共用。
+import type { CourseInfo } from '../core/courses';
 import { monthDay, type CardCell } from '../core/ocCard';
 import type { CourseType } from '../core/types';
 import { COPY } from './copy';
 
-/** 每門課的顏色（跟大廳拱門的旗子同一組） */
-export const COURSE_COLORS: Record<CourseType, string> = {
+/** 內建課程的顏色（跟大廳拱門的旗子同一組） */
+const COURSE_COLORS: Record<CourseType, string> = {
   typography: '#b49bff', color: '#ff8fae', composition: '#7fb6ff', drawing: '#7fd48f',
 };
+/** 自訂課程照建立順序輪流用的顏色 */
+const CUSTOM_COLORS = ['#ffad66', '#56cfc3', '#dd8ee0', '#b5d65e', '#ff8a80', '#e8c04f'];
+
+export const courseColor = (c: CourseInfo): string =>
+  c.kind === 'builtin' ? COURSE_COLORS[c.id] : CUSTOM_COLORS[c.customIndex % CUSTOM_COLORS.length];
 
 const C = COPY.card;
 const SVG_NS = 'http://www.w3.org/2000/svg';

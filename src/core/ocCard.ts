@@ -1,9 +1,10 @@
-// OC 設定卡（企劃表 7.4）：4 區（4 門課）× 每區 3 格。一格 = 一張委託，切成「計時任務數」那麼多片（預設 5 片）；
-// 每完成一個任務亮一片，交件後整格點亮、換成作業成果。
+// OC 設定卡（企劃表 7.4）：一門課一區（內建 4 門＋每門自訂課程各一區）× 每區 3 格。
+// 一格 = 一張委託，切成「計時任務數」那麼多片（預設 5 片）；每完成一個任務亮一片，交件後整格點亮、換成作業成果。
 // 一區 3 格都用過以後，第 4 張同課程委託從第 1 格再來一輪，原本在那格的委託收進「歷史」。
+import { allCourses, type CourseInfo } from './courses';
 import { CELLS_PER_COURSE, isSubmitted } from './state';
 import { COURSE_TEMPLATES } from './templates';
-import type { Commission, CourseType, GuildState, Level } from './types';
+import type { Commission, GuildState, Level } from './types';
 
 export interface CardSlice {
   level: Level;
@@ -20,7 +21,7 @@ export interface CardCell {
 }
 
 export interface CardSection {
-  course: CourseType;
+  course: CourseInfo;
   cells: CardCell[];
   /** 被新委託擠下來的舊委託，新的在前 */
   history: Commission[];
@@ -34,6 +35,12 @@ export interface OcCardModel {
 
 /** 一張委託的完成度：任務占 5/6、交件占 1/6（交件那塊會換成作業成果） */
 export const RESULT_SHARE = 1 / 6;
+
+/**
+ * 完成度的分母：內建 4 區 × 3 格 = 12 格。
+ * 自訂課程的委託也算進完成度，但不加大分母，不然每多一門課，完成度就往下掉。
+ */
+export const COMPLETION_CELLS = COURSE_TEMPLATES.length * CELLS_PER_COURSE;
 
 export function commissionProgress(c: Commission): number {
   if (isSubmitted(c)) return 1;
@@ -53,8 +60,8 @@ export function cellOf(commission: Commission): CardCell {
 const emptyCell = (index: number): CardCell => ({ index, commission: null, slices: [], lit: 0, submitted: false });
 
 export function buildOcCard(s: GuildState): OcCardModel {
-  const sections = COURSE_TEMPLATES.map(({ course }): CardSection => {
-    const mine = s.commissions.filter((c) => c.course === course).sort((a, b) => a.createdAt - b.createdAt);
+  const sections = allCourses(s).map((course): CardSection => {
+    const mine = s.commissions.filter((c) => c.course === course.id).sort((a, b) => a.createdAt - b.createdAt);
     const cells = Array.from({ length: CELLS_PER_COURSE }, (_, index): CardCell => {
       const commission = mine.filter((c) => c.cellIndex === index).at(-1);
       return commission ? cellOf(commission) : emptyCell(index);
@@ -63,13 +70,12 @@ export function buildOcCard(s: GuildState): OcCardModel {
     const history = mine.filter((c) => !current.has(c.id)).reverse();
     return { course, cells, history };
   });
-  // 完成度：卡上和歷史裡的每張委託都算，加起來除以格子數，最多 100%。
+  // 完成度：卡上和歷史裡的每張委託都算，加起來除以 12 格，最多 100%。
   // 這樣同一門課接第 4 張、舊的收進歷史時，完成度不會往下掉（10/10 組員決定）。
-  const cellCount = sections.reduce((n, x) => n + x.cells.length, 0);
   const total = sections.reduce((sum, x) => sum
     + x.cells.reduce((a, c) => a + cellProgress(c), 0)
     + x.history.reduce((a, c) => a + commissionProgress(c), 0), 0);
-  return { sections, completion: Math.min(1, total / cellCount) };
+  return { sections, completion: Math.min(1, total / COMPLETION_CELLS) };
 }
 
 /** 設定卡上的日期：10/12 */

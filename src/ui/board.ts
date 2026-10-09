@@ -1,16 +1,18 @@
 // 委託板：進行中的委託、接新委託、完成的委託（摺疊）。
 // 委託卡只寫學校作業：課程、作業名稱、截止倒數、進度、開始任務按鈕，不放其他說明文字。
+// 委託單上可以新加一門課（取名字、選交件後解鎖什麼），接下委託時一起存。
+import { allCourses, COURSE_NAME_MAX, courseInfo, type CourseInfo } from '../core/courses';
 import {
   addLevel, canAddLevel, canMoveLevel, canRemoveLevel, COMMISSION_TITLE_MAX, draftProblem, LEVEL_TITLE_MAX, moveLevel,
-  removeLevel, renameLevel, toCommissionDraft,
+  removeLevel, renameLevel, toCommissionDraft, type DraftForm, type NewCourseForm,
 } from '../core/draft';
 import { defaultDueAt, dueCountdown, fromDateTimeLocal, isOverdue, toDateTimeLocal } from '../core/due';
 import {
   activeCommissions, completedCommissions, isSubmitted, nextLevel, timedProgress, type CommissionDraft, type LevelDraft,
 } from '../core/state';
 import type { GuildStore } from '../core/store';
-import { COURSE_TEMPLATES, courseLabel, LEVEL_MINUTES, templateLevels } from '../core/templates';
-import type { Commission, CourseType, Level } from '../core/types';
+import { CUSTOM_COURSE_LEVELS, LEVEL_MINUTES, levelsFrom, PART_LABELS, PARTS } from '../core/templates';
+import type { Commission, Level } from '../core/types';
 import { COPY } from './copy';
 import { el, on } from './dom';
 import { openDialog } from './overlay';
@@ -40,22 +42,21 @@ export function openBoard(deps: BoardDeps): void {
     dialog.setTitle(T.title);
     const s = deps.store.state, now = Date.now();
     const active = activeCommissions(s), done = completedCommissions(s);
+    const card = (c: Commission): HTMLLIElement => commissionCard(c, courseInfo(s, c.course).label, now, deps.openTask);
     dialog.body.replaceChildren(
       on(el('button', { type: 'button', class: 'primary' }, T.newCommission), 'click', showForm),
       el('h3', { class: 'section-title' }, T.active(active.length)),
-      active.length
-        ? el('ul', { class: 'commissions' }, ...active.map((c) => commissionCard(c, now, deps.openTask)))
-        : el('p', { class: 'empty' }, T.empty),
+      active.length ? el('ul', { class: 'commissions' }, ...active.map(card)) : el('p', { class: 'empty' }, T.empty),
       el('details', { class: 'done' },
         el('summary', {}, T.done(done.length)),
-        done.length ? el('ul', { class: 'commissions' }, ...done.map((c) => commissionCard(c, now, deps.openTask))) : null),
+        done.length ? el('ul', { class: 'commissions' }, ...done.map(card)) : null),
     );
   }
 
   function showForm(): void {
     view = 'form';
     dialog.setTitle(F.title);
-    dialog.body.replaceChildren(commissionForm({
+    dialog.body.replaceChildren(commissionForm(deps.store, {
       async onSubmit(draft) {
         await deps.createCommission(draft);
         showList();
@@ -72,7 +73,7 @@ function taskButton(c: Commission, next: Level, openTask: BoardDeps['openTask'])
   return on(el('button', { type: 'button', class: 'c-start' }, label), 'click', () => openTask(c.id, next.id));
 }
 
-function commissionCard(c: Commission, now: number, openTask: BoardDeps['openTask']): HTMLLIElement {
+function commissionCard(c: Commission, course: string, now: number, openTask: BoardDeps['openTask']): HTMLLIElement {
   const { done, total } = timedProgress(c);
   const submitted = isSubmitted(c);
   const overdue = !submitted && isOverdue(c.dueAt, now);
@@ -81,7 +82,7 @@ function commissionCard(c: Commission, now: number, openTask: BoardDeps['openTas
     ...Array.from({ length: total }, (_, i) => el('span', { class: i < done ? 'seg on' : 'seg' })));
   return el('li', { class: overdue ? 'commission is-overdue' : 'commission' },
     el('div', { class: 'c-row' },
-      el('span', { class: 'c-course' }, courseLabel(c.course)),
+      el('span', { class: 'c-course' }, course),
       el('span', { class: 'c-due' }, submitted ? T.submitted : dueCountdown(c.dueAt, now))),
     el('div', { class: 'c-title' }, c.title),
     el('div', { class: 'c-row' },
@@ -97,8 +98,10 @@ interface FormHandlers {
 
 type FocusPart = 'input' | 'up' | 'down' | 'remove';
 
-function commissionForm(h: FormHandlers): HTMLFormElement {
-  let course: CourseType | null = null;
+function commissionForm(store: GuildStore, h: FormHandlers): HTMLFormElement {
+  /** 選的課程：已經有的課程、這張委託單上新加的課程（'new'），或還沒選 */
+  let picked: CourseInfo | 'new' | null = null;
+  const newCourse: NewCourseForm = { label: '', part: null };
   let levels: LevelDraft[] = [];
   let busy = false;
 
@@ -111,17 +114,42 @@ function commissionForm(h: FormHandlers): HTMLFormElement {
   const msg = el('p', { class: 'card-msg', role: 'status', 'aria-live': 'polite' });
   const submit = el('button', { type: 'submit', class: 'primary' }, F.accept);
 
-  const courseButtons = COURSE_TEMPLATES.map((t) => {
-    const radio = el('input', { type: 'radio', name: 'course', value: t.course, class: 'sr-only' });
-    on(radio, 'change', () => {
-      course = t.course;
-      levels = templateLevels(t.course);
-      msg.textContent = '';
-      renderLevels();
-      if (!titleInput.value.trim()) titleInput.focus();
-    });
-    return el('label', { class: 'seg-btn' }, radio, t.label);
+  // 新課程：課程名稱＋交件後解鎖什麼，選「＋ 新課程」才出現
+  const nameInput = el('input', {
+    id: 'cCourseName', type: 'text', maxlength: COURSE_NAME_MAX, autocomplete: 'off', enterkeyhint: 'done',
+    placeholder: F.courseNamePlaceholder(COURSE_NAME_MAX),
   });
+  on(nameInput, 'input', () => { newCourse.label = nameInput.value; });
+  const partButtons = PARTS.map((part) => {
+    const radio = el('input', { type: 'radio', name: 'part', value: part, class: 'sr-only' });
+    on(radio, 'change', () => { newCourse.part = part; msg.textContent = ''; });
+    return el('label', { class: 'seg-btn' }, radio, PART_LABELS[part]);
+  });
+  const newCourseBox = el('div', { class: 'new-course', hidden: true },
+    el('div', { class: 'field' }, el('label', { for: 'cCourseName' }, F.courseName), nameInput),
+    el('div', { class: 'field' },
+      el('span', { class: 'field-label', id: 'cPartLabel' }, F.coursePart),
+      el('div', { class: 'seg-group', role: 'radiogroup', 'aria-labelledby': 'cPartLabel' }, ...partButtons)));
+
+  /** 換課程：任務清單換成那門課的預設任務 */
+  function pickCourse(next: CourseInfo | 'new'): void {
+    picked = next;
+    levels = levelsFrom(next === 'new' ? CUSTOM_COURSE_LEVELS : next.levels);
+    newCourseBox.hidden = next !== 'new';
+    msg.textContent = '';
+    renderLevels();
+    const blank = next === 'new' ? nameInput : titleInput;
+    if (!blank.value.trim()) blank.focus();
+  }
+  const courseButton = (value: string, label: string, next: CourseInfo | 'new', cls = 'seg-btn'): HTMLLabelElement => {
+    const radio = el('input', { type: 'radio', name: 'course', value, class: 'sr-only' });
+    on(radio, 'change', () => pickCourse(next));
+    return el('label', { class: cls }, radio, label);
+  };
+  const courseButtons = [
+    ...allCourses(store.state).map((c) => courseButton(c.id, c.label, c)),
+    courseButton('new', F.newCourse, 'new', 'seg-btn is-add'),
+  ];
 
   function renderLevels(focus?: { index: number; part: FocusPart }): void {
     if (!levels.length) {
@@ -175,7 +203,8 @@ function commissionForm(h: FormHandlers): HTMLFormElement {
   const form = el('form', { class: 'commission-form', novalidate: true },
     el('div', { class: 'field' },
       el('span', { class: 'field-label', id: 'cCourseLabel' }, F.course),
-      el('div', { class: 'seg-group', role: 'radiogroup', 'aria-labelledby': 'cCourseLabel' }, ...courseButtons)),
+      el('div', { class: 'seg-group', role: 'radiogroup', 'aria-labelledby': 'cCourseLabel' }, ...courseButtons),
+      newCourseBox),
     el('div', { class: 'field' }, el('label', { for: 'cTitle' }, F.workTitle), titleInput),
     el('div', { class: 'field' }, el('label', { for: 'cDue' }, F.due), dueInput),
     el('div', { class: 'field' }, el('span', { class: 'field-label' }, F.tasks(LEVEL_MINUTES)), levelBox),
@@ -191,12 +220,15 @@ function commissionForm(h: FormHandlers): HTMLFormElement {
   on(form, 'submit', async (e) => {
     e.preventDefault();
     if (busy) return;
-    const f = { course, title: titleInput.value, dueAt: fromDateTimeLocal(dueInput.value), levels };
-    const problem = draftProblem(f);
+    const f: DraftForm = {
+      course: picked === 'new' ? newCourse : picked?.id ?? null,
+      title: titleInput.value, dueAt: fromDateTimeLocal(dueInput.value), levels,
+    };
+    const problem = draftProblem(f, store.state);
     if (problem) { msg.textContent = F.problems[problem]; return; }
     busy = true; submit.disabled = true; submit.textContent = F.accepting;
     try {
-      await h.onSubmit(toCommissionDraft(f));
+      await h.onSubmit(toCommissionDraft(f, store.state));
     } catch (err) {
       console.error('建立委託失敗', err);
       msg.textContent = F.saveFailed;

@@ -29,6 +29,20 @@ describe('委託與任務的操作', () => {
     expect(store.state.commissions[0].id).toBe(cId);
   });
 
+  it('委託單上新加課程：先記 course_created 再記 commission_created；同一門課再接不會再記', async () => {
+    const { actions, store, kv, types, draft } = await setup();
+    const id1 = await actions.createCommission({ ...draft, course: { label: '攝影', part: 'layout' } });
+    const course = store.state.customCourses[0];
+    expect(course).toMatchObject({ label: '攝影', part: 'layout' });
+    expect(store.state.commissions.find((c) => c.id === id1)?.course).toBe(course.id);
+    await actions.createCommission({ ...draft, course: course.id });
+    expect(await types()).toEqual(['commission_created', 'course_created', 'commission_created', 'commission_created']);
+    const events = await loadEvents(kv);
+    expect(events[1].data).toEqual({ course: course.id, label: '攝影', part: 'layout' });
+    expect(events[2]).toMatchObject({ commissionId: id1, data: { course: course.id } });
+    expect((await loadState(kv))!.customCourses).toEqual([course]);
+  });
+
   it('開始 → 暫停 → 繼續 → 完成：四種事件都有記，而且照順序', async () => {
     const { actions, cId, levelIds, clock, types, kv } = await setup();
     const l = levelIds[0];

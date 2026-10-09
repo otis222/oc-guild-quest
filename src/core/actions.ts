@@ -3,7 +3,7 @@
 import { logEvent, type EventFields } from './events';
 import { newId } from './id';
 import {
-  addCommission, completeLevel, extendLevel, findLevel, pauseLevel, resumeLevel, startLevel, type CommissionDraft,
+  addCommission, completeLevel, extendLevel, findCommission, findLevel, pauseLevel, resumeLevel, startLevel, type CommissionDraft,
 } from './state';
 import type { KV } from './storage';
 import type { GuildStore } from './store';
@@ -11,7 +11,7 @@ import { EXTEND_MINUTES, timerPhase } from './timer';
 import type { EventType, GuildState, Level } from './types';
 
 export interface Actions {
-  /** 接新委託，回傳委託 id */
+  /** 接新委託（委託單上新加的課程一起建立），回傳委託 id */
   createCommission(draft: CommissionDraft): Promise<string>;
   /** 下面幾個回傳「狀態有沒有變」 */
   startLevel(commissionId: string, levelId: string): Promise<boolean>;
@@ -67,8 +67,12 @@ export function createActions(kv: KV, store: GuildStore, clock: () => number = D
   return {
     async createCommission(draft) {
       const now = clock(), id = newId(now);
-      await apply((s) => addCommission(s, draft, now, id));
-      await log('commission_created', { commissionId: id, data: { course: draft.course, levels: draft.levels.length, dueAt: draft.dueAt } }, now);
+      const { before, after } = await apply((s) => addCommission(s, draft, now, id));
+      const { course } = findCommission(after, id);
+      // 委託單上新加的課程（同名的課程已經有了就不會新增，也不記）
+      const created = after.customCourses.find((c) => c.id === course && !before.customCourses.some((b) => b.id === c.id));
+      if (created) await log('course_created', { data: { course, label: created.label, part: created.part } }, now);
+      await log('commission_created', { commissionId: id, data: { course, levels: draft.levels.length, dueAt: draft.dueAt } }, now);
       return id;
     },
 

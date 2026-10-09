@@ -19,9 +19,9 @@ const draft = (course: CourseType = 'color', title = '色相環'): CommissionDra
 });
 
 describe('建立狀態', () => {
-  it('新存檔：版本 1、公會等級 1、沒有委託和展品', () => {
+  it('新存檔：目前版本、公會等級 1、沒有委託、展品和自訂課程', () => {
     expect(createGuildState(OC, 123)).toStrictEqual({
-      version: STATE_VERSION, createdAt: 123, oc: OC, commissions: [], guildLevel: 1, exhibits: [],
+      version: STATE_VERSION, createdAt: 123, oc: OC, commissions: [], guildLevel: 1, exhibits: [], customCourses: [],
     });
   });
 });
@@ -55,6 +55,17 @@ describe('接委託', () => {
     expect(s.commissions.map((c) => [c.course, c.cellIndex])).toEqual([
       ['color', 0], ['color', 1], ['typography', 0], ['color', 2], ['color', 0],
     ]);
+  });
+
+  it('委託單上新加的課程跟委託一起建立；之後用課程 id 接，格子接著算', () => {
+    const s1 = addCommission(createGuildState(OC, 1), { ...draft(), course: { label: '攝影', part: 'layout' } }, 1000, 'c1');
+    expect(s1.customCourses).toHaveLength(1);
+    const { id } = s1.customCourses[0];
+    expect(id).toMatch(/^custom:/);
+    expect(s1.commissions[0]).toMatchObject({ course: id, cellIndex: 0 });
+    const s2 = addCommission(s1, { ...draft(), course: id }, 2000, 'c2');
+    expect(s2.customCourses).toHaveLength(1);
+    expect(s2.commissions[1]).toMatchObject({ course: id, cellIndex: 1 });
   });
 });
 
@@ -165,33 +176,47 @@ describe('存檔與讀檔', () => {
 });
 
 describe('版本與 migration', () => {
-  const v1 = (): GuildState => createGuildState(OC, 1);
+  const current = (): GuildState => createGuildState(OC, 1);
 
   it('目前版本直接通過', () => {
-    expect(migrate(v1())).toStrictEqual(v1());
+    expect(migrate(current())).toStrictEqual(current());
   });
 
   it('不是存檔、沒有版本號、缺欄位，都會丟錯', () => {
     expect(() => migrate(null)).toThrow();
     expect(() => migrate('state')).toThrow();
-    expect(() => migrate({ ...v1(), version: undefined })).toThrow();
-    expect(() => migrate({ ...v1(), oc: { name: '小鈴' } })).toThrow();
-    expect(() => migrate({ ...v1(), commissions: undefined })).toThrow();
+    expect(() => migrate({ ...current(), version: undefined })).toThrow();
+    expect(() => migrate({ ...current(), oc: { name: '小鈴' } })).toThrow();
+    expect(() => migrate({ ...current(), commissions: undefined })).toThrow();
+    expect(() => migrate({ ...current(), customCourses: undefined })).toThrow();
   });
 
   it('比程式新的存檔不會被讀進來（避免被舊程式蓋掉）', () => {
-    expect(() => migrate({ ...v1(), version: STATE_VERSION + 1 })).toThrow(/比程式/);
+    expect(() => migrate({ ...current(), version: STATE_VERSION + 1 })).toThrow(/比程式/);
+  });
+
+  it('第 1 版的存檔（還沒有自訂課程）升到第 2 版，委託原樣保留', () => {
+    const withWork = addCommission(current(), draft(), 1000, 'c1');
+    const v1: Record<string, unknown> = { ...withWork, version: 1 };
+    delete v1.customCourses;
+    const upgraded = migrate(v1);
+    expect(upgraded).toStrictEqual(withWork);
+    expect(upgraded.version).toBe(2);
   });
 
   it('舊版存檔會一版一版升上來', () => {
-    const v0: Record<string, unknown> = { ...v1(), version: 0 };
+    const v0: Record<string, unknown> = { ...current(), version: 0 };
     delete v0.exhibits;
-    const upgraded = migrate(v0, { 0: (old) => ({ ...old, version: 1, exhibits: [] }) });
-    expect(upgraded).toStrictEqual(v1());
+    delete v0.customCourses;
+    const upgraded = migrate(v0, {
+      0: (old) => ({ ...old, version: 1, exhibits: [] }),
+      1: (old) => ({ ...old, version: 2, customCourses: [] }),
+    });
+    expect(upgraded).toStrictEqual(current());
   });
 
   it('缺升級方式、或升級後版本號沒有往上加，會丟錯而不是卡住', () => {
-    expect(() => migrate({ ...v1(), version: 0 })).toThrow(/升級方式/);
-    expect(() => migrate({ ...v1(), version: 0 }, { 0: (old) => old })).toThrow(/往上加/);
+    expect(() => migrate({ ...current(), version: 0 })).toThrow(/升級方式/);
+    expect(() => migrate({ ...current(), version: 0 }, { 0: (old) => old })).toThrow(/往上加/);
   });
 });

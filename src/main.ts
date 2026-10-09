@@ -1,23 +1,31 @@
-// 進入點：組裝大廳場景、小人、鏡頭、輸入和 HUD，跑每幀的迴圈。
+// 進入點：組裝大廳、讀存檔；第一次進入先建立 OC，再把主角和公會成員放進大廳。
 import './style.css';
 import * as THREE from 'three';
+import type { Texture } from 'pixi.js';
 import { logEvent } from './core/events';
-import { pick } from './core/math';
-import { idbKV } from './core/storage';
+import type { SpriteManifest } from './core/manifest';
+import { pickGuildMembers, uploadedPhotoId, uploadSpriteRef } from './core/oc';
+import { createGuildState, loadState, saveState } from './core/state';
+import { getPhoto, idbKV, putPhoto, type KV } from './core/storage';
+import type { GuildState, OCProfile } from './core/types';
 import { CameraRig } from './scene/camera';
-import { Chibi, HELLO, POKED, type ChibiDef, type ChibiWorld } from './scene/chibi';
-import { FOUNTAIN_R, WALK_R } from './scene/constants';
+import type { Chibi, ChibiWorld } from './scene/chibi';
 import { Input } from './scene/input';
+import { createLobby, MEMBER_LABEL, type Lobby } from './scene/lobby';
 import { createPlaza } from './scene/plaza';
 import { createRenderers } from './scene/renderer';
 import { loadManifest, loadTexture, spriteUrl } from './scene/sprites';
 import { createViewport } from './scene/viewport';
+import { showCreateOcCard } from './ui/createOC';
 import { createHud } from './ui/hud';
+
+const ORIGIN = new THREE.Vector3();
+const warn = (what: string) => (err: unknown): void => console.warn(what, err);
 
 async function main(): Promise<void> {
   const kv = idbKV();
   // 先記開啟，3D 場景載入失敗也記得到；寫不進去不影響大廳
-  logEvent(kv, 'app_opened').catch((err: unknown) => console.warn('事件紀錄寫入失敗', err));
+  logEvent(kv, 'app_opened').catch(warn('事件紀錄寫入失敗'));
 
   const stage = document.getElementById('stage');
   if (!stage) throw new Error('找不到 #stage');
@@ -26,65 +34,99 @@ async function main(): Promise<void> {
   const gfx = await createRenderers(vp);
   const plaza = createPlaza();
   const rig = new CameraRig(vp);
-
-  const manifest = await loadManifest();
-  const defs: ChibiDef[] = manifest.members.map((m) => ({ name: m.name, src: spriteUrl(m.file) }));
-  const textures = await Promise.all(defs.map((d) => loadTexture(d.src)));
   const world: ChibiWorld = { scene: plaza.scene, layer: gfx.charLayer, rig, shadowGeo: plaza.shadowGeo, shadowTex: plaza.shadowTex };
-  const chibis = defs.map((d, i) => new Chibi(world, d, textures[i], i, defs.length));
-  if (!chibis.length) throw new Error('manifest 裡沒有角色');
-  let selected = chibis[0];
-
+  const lobby = createLobby(world, plaza);
   const hud = createHud({
-    onHello: () => chibis.forEach((c, i) => setTimeout(() => { c.hop(); c.say(pick(HELLO)); }, i * 110)),
+    onHello: () => lobby.helloAll(),
     onToggleTime: () => plaza.toggleTime(),
   });
-  hud.setRoster(defs, (i) => select(chibis[i], true));
-
-  function select(c: Chibi, poke = false): void {
-    selected = c;
-    chibis.forEach((o) => { o.manual = o === c && o.manual; });
-    hud.setSelected(chibis.indexOf(c));
-    if (poke) { c.hop(); c.say(pick(POKED)); }
-  }
-  select(selected);
-
-  function tap(x: number, y: number): void {
-    const hits = chibis.filter((c) => c.hit(x, y)).sort((a, b) => b.view.zIndex - a.view.zIndex);
-    if (hits.length) { select(hits[0], true); return; }
-    const p = rig.floorPoint(x, y);
-    if (!p) return;
-    const r = Math.hypot(p.x, p.z);
-    if (r > 9.4) return;
-    if (r > WALK_R) { p.x *= WALK_R / r; p.z *= WALK_R / r; }
-    if (r < FOUNTAIN_R + 0.2) { const k = (FOUNTAIN_R + 0.3) / (r || 1); p.x *= k; p.z *= k; }
-    selected.manual = true; selected.goTo(p.x, p.z);
-    plaza.showMarker(p.x, p.z);
-  }
-  const input = new Input(vp, rig, tap);
+  const input = new Input(vp, rig, (x, y) => lobby.tap(x, y));
 
   addEventListener('resize', () => {
     gfx.resize();
     rig.frame();
   });
 
+  // 大廳先動起來；第一次進入時，建立 OC 的卡片蓋在上面
   const clock = new THREE.Clock();
   let t = 0;
-  hud.hideLoading();
   function loop(): void {
     const dt = Math.min(0.05, clock.getDelta());
     t += dt;
-    if (input.updateKeys()) selected.manual = true;
+    const player = lobby.player;
+    if (input.updateKeys() && player) player.manual = true;
 
-    plaza.update(dt, t, selected.pos);
-    rig.update(dt, t, selected.pos);
-    const ctl = { selected, keyDir: input.keyDir };
-    chibis.forEach((c) => c.update(dt, t, chibis, ctl));
+    plaza.update(dt, t, player ? player.pos : null);
+    rig.update(dt, t, player ? player.pos : ORIGIN);
+    lobby.update(dt, t, input.keyDir);
 
     gfx.render(plaza.scene, rig.camera);
     requestAnimationFrame(loop);
   }
   loop();
+
+  const manifest = await loadManifest();
+  let state: GuildState | null;
+  try {
+    state = await loadState(kv);
+  } catch (err) {
+    // 存檔讀不出來時不能讓玩家重建 OC，不然會把舊存檔蓋掉
+    console.error('讀不到存檔', err);
+    hud.showError('讀不到存檔。請重新整理，還是不行的話請聯絡組員。');
+    return;
+  }
+
+  const isNew = !state;
+  if (!state) {
+    hud.hideLoading();
+    state = await createOc(kv, manifest);
+  }
+  const player = await spawnCharacters(lobby, kv, manifest, state.oc);
+  hud.hideLoading();
+  if (isNew) player.hop();
+}
+
+/** 第一次進入：顯示建立 OC 的卡片，存好新存檔才回傳 */
+function createOc(kv: KV, manifest: SpriteManifest): Promise<GuildState> {
+  return showCreateOcCard({
+    presets: manifest.members,
+    spriteUrl,
+    async onSubmit({ name, choice }) {
+      const sprite = choice.kind === 'preset' ? choice.file : uploadSpriteRef(await putPhoto(kv, choice.blob));
+      const state = createGuildState({ name, sprite });
+      await saveState(kv, state);
+      await logEvent(kv, 'oc_created', { data: { sprite } }).catch(warn('事件紀錄寫入失敗'));
+      return state;
+    },
+  });
+}
+
+/** 主角的圖：AI 小人用檔名讀，上傳的圖從 IndexedDB 讀 */
+async function loadPlayerTexture(kv: KV, sprite: string): Promise<Texture> {
+  const photoId = uploadedPhotoId(sprite);
+  if (!photoId) return loadTexture(spriteUrl(sprite));
+  const blob = await getPhoto(kv, photoId);
+  if (!blob) throw new Error(`找不到上傳的圖 ${photoId}`);
+  // 主角圖整場都會用到，網址不收回
+  return loadTexture(URL.createObjectURL(blob));
+}
+
+/** 放主角和公會成員進大廳；哪張圖載入失敗就用剪影代替 */
+async function spawnCharacters(lobby: Lobby, kv: KV, manifest: SpriteManifest, oc: OCProfile): Promise<Chibi> {
+  let silhouette: Promise<Texture> | null = null;
+  const fallback = (err: unknown): Promise<Texture> => {
+    console.warn('小人圖載入失敗，改用剪影', err);
+    return (silhouette ??= loadTexture(spriteUrl(manifest.playerDefault)));
+  };
+  const members = pickGuildMembers(manifest.members, oc.sprite);
+  const [playerTex, ...memberTexes] = await Promise.all([
+    loadPlayerTexture(kv, oc.sprite).catch(fallback),
+    ...members.map((m) => loadTexture(spriteUrl(m.file)).catch(fallback)),
+  ]);
+  return lobby.populate(
+    { def: { name: oc.name }, tex: playerTex },
+    memberTexes.map((tex) => ({ def: { name: MEMBER_LABEL }, tex })),
+  );
 }
 
 void main();

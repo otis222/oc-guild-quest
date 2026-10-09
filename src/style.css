@@ -38,23 +38,63 @@ button {
 }
 button:hover { background: #fff; }
 button:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
-.roster {
-  position: fixed; left: 0; right: 0; bottom: max(12px, env(safe-area-inset-bottom));
-  display: flex; gap: 8px; padding: 6px max(16px, env(safe-area-inset-left)); overflow-x: auto;
-  scrollbar-width: none; justify-content: safe center;
+button:disabled { opacity: 0.55; cursor: default; }
+button:disabled:hover { background: var(--panel); }
+.sr-only {
+  position: absolute; width: 1px; height: 1px; margin: -1px; padding: 0; border: 0;
+  overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap;
 }
-.roster::-webkit-scrollbar { display: none; }
-.who {
-  flex: 0 0 auto; display: flex; align-items: center; gap: 6px; padding: 4px 10px 4px 4px;
-  border-radius: 999px; font-size: 12px; font-weight: 600;
+
+/* 底部：委託板、OC 設定卡 */
+.dock {
+  position: fixed; left: 0; right: 0; bottom: max(14px, env(safe-area-inset-bottom));
+  display: flex; gap: 10px; justify-content: center; padding: 0 16px; pointer-events: none;
 }
-.who img { width: 30px; height: 36px; object-fit: contain; object-position: top; border-radius: 999px; background: #fff; }
-.who[aria-pressed="true"] { border-color: var(--accent); background: var(--accent-soft); box-shadow: 0 0 0 2px var(--accent) inset; }
+.dock button { pointer-events: auto; min-height: 46px; padding: 10px 20px; font-size: 15px; }
+
 #loading {
   position: fixed; inset: 0; display: grid; place-items: center; background: var(--sky);
   font-size: 15px; color: var(--ink-soft); transition: opacity .6s; z-index: 5;
+  padding: 24px; text-align: center; line-height: 1.6;
 }
 #loading.hide { opacity: 0; pointer-events: none; }
+#loading.error { color: var(--ink); }
+
+/* 蓋在大廳上的卡片（建立 OC、之後的委託板等） */
+.overlay {
+  position: fixed; inset: 0; z-index: 10; display: flex; flex-direction: column; overflow-y: auto;
+  padding: max(16px, env(safe-area-inset-top)) max(16px, env(safe-area-inset-right))
+    max(16px, env(safe-area-inset-bottom)) max(16px, env(safe-area-inset-left));
+  background: rgba(47, 37, 66, 0.28);
+}
+.card { margin: auto; width: 100%; max-width: 420px; padding: 18px 16px 16px; background: rgba(255, 255, 255, 0.92); }
+.card h2 { margin: 0 0 14px; font-size: 18px; letter-spacing: 0.04em; }
+.field { margin-bottom: 14px; }
+.field > label, .field-label { display: block; margin-bottom: 6px; font-size: 13px; font-weight: 700; color: var(--ink-soft); }
+.field > input {
+  width: 100%; font: inherit; font-size: 16px; color: var(--ink); background: #fff;
+  padding: 10px 12px; border-radius: 12px; border: 1px solid var(--panel-line);
+  -webkit-user-select: text; user-select: text;
+}
+.field > input:focus-visible { outline: 2px solid var(--accent); outline-offset: 1px; }
+.pick-grid { display: grid; grid-template-columns: repeat(4, 1fr); gap: 8px; }
+.pick {
+  position: relative; display: grid; place-items: center; aspect-ratio: 3 / 4; overflow: hidden; cursor: pointer;
+  border-radius: 14px; background: #fff; border: 1px solid var(--panel-line);
+}
+.pick img { width: 100%; height: 100%; object-fit: contain; padding: 5px; pointer-events: none; }
+.pick.is-on { border-color: var(--accent); background: var(--accent-soft); box-shadow: 0 0 0 2px var(--accent) inset; }
+.pick:has(input:focus-visible) { outline: 2px solid var(--accent); outline-offset: 2px; }
+.pick-upload { border-style: dashed; border-color: rgba(47, 37, 66, 0.3); }
+.pick-upload-text { font-size: 12px; font-weight: 700; color: var(--ink-soft); text-align: center; line-height: 1.5; }
+.card-note { margin: 0; font-size: 12px; color: var(--ink-soft); line-height: 1.5; }
+.card-msg { min-height: 1.5em; margin: 6px 0 0; font-size: 13px; color: #c2185b; }
+.card .primary {
+  width: 100%; margin-top: 8px; padding: 12px; font-size: 16px; font-weight: 700;
+  color: #fff; background: var(--accent); border-color: transparent;
+}
+.card .primary:hover { background: #ff5a88; }
+.card .primary:disabled { opacity: 1; color: #fff; background: #d6cfde; }
 @media (max-width: 640px) {
   .title p { display: none; }
   .title h1 { font-size: 15px; }

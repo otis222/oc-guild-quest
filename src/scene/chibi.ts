@@ -13,7 +13,10 @@ export const POKED = ['在！', '要去哪？', '被點到了', '♪', '嘿嘿',
 
 const FONT = 'Noto Sans TC, Microsoft JhengHei, PingFang TC, sans-serif';
 
-export interface ChibiDef { name: string; src: string }
+export interface ChibiDef {
+  /** 頭上的名字標籤 */
+  name: string;
+}
 
 /** 小人需要的場景資源 */
 export interface ChibiWorld {

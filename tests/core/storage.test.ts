@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { addCommission, createGuildState, saveState, updateState } from '../../src/core/state';
-import { deletePhoto, getPhoto, photoKey, putPhoto, STATE_KEY } from '../../src/core/storage';
+import { deletePhoto, getPhoto, photoKey, putPhoto, requestPersistence, STATE_KEY } from '../../src/core/storage';
 import { memoryKV } from '../helpers/memoryKV';
 
 describe('照片', () => {
@@ -42,5 +42,34 @@ describe('照片', () => {
     walk(kv.raw.get(STATE_KEY), 'state');
     expect(blobs).toEqual([]);
     expect((kv.raw.get(STATE_KEY) as { commissions: { photoId: string }[] }).commissions[0].photoId).toBe(photoId);
+  });
+});
+
+describe('請瀏覽器不要清掉資料', () => {
+  const fake = (persisted: boolean, grant: boolean) => {
+    const calls = { persist: 0 };
+    const storage = {
+      persisted: async () => persisted,
+      persist: async () => { calls.persist++; return grant; },
+    } as unknown as StorageManager;
+    return { storage, calls };
+  };
+
+  it('瀏覽器不支援：回傳 false，不會出錯', async () => {
+    expect(await requestPersistence(undefined)).toBe(false);
+    expect(await requestPersistence({} as StorageManager)).toBe(false);
+  });
+
+  it('已經答應過了：不再問一次', async () => {
+    const { storage, calls } = fake(true, true);
+    expect(await requestPersistence(storage)).toBe(true);
+    expect(calls.persist).toBe(0);
+  });
+
+  it('還沒答應：問一次，照瀏覽器的回答回傳', async () => {
+    const yes = fake(false, true), no = fake(false, false);
+    expect(await requestPersistence(yes.storage)).toBe(true);
+    expect(await requestPersistence(no.storage)).toBe(false);
+    expect([yes.calls.persist, no.calls.persist]).toEqual([1, 1]);
   });
 });

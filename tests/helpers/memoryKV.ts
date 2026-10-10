@@ -23,5 +23,8 @@ export function memoryKV(): KV & { raw: Map<string, unknown> } {
     async del(key) {
       raw.delete(key);
     },
+    async clear() {
+      raw.clear();
+    },
   };
 }

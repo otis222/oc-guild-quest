@@ -4,7 +4,7 @@
 //   'state'        整個 GuildState（state.ts）
 //   'events'       事件陣列（events.ts）
 //   'photo:<id>'   照片 Blob；狀態裡只放 id
-import { createStore, del, get, set, update } from 'idb-keyval';
+import { clear, createStore, del, get, set, update } from 'idb-keyval';
 import { newId } from './id';
 
 export const STATE_KEY = 'state';
@@ -22,6 +22,8 @@ export interface KV {
   update<T>(key: string, fn: (old: T | undefined) => T): Promise<T>;
   /** 刪掉一個 key（換造型時刪掉舊的上傳圖、交件沒存成功時刪掉剛存的照片） */
   del(key: string): Promise<void>;
+  /** 全部刪掉：存檔、事件、照片（研究模式的「清除全部資料」） */
+  clear(): Promise<void>;
 }
 
 /**
@@ -39,6 +41,7 @@ export function idbKV(dbName = 'oc-guild-quest', storeName = 'kv'): KV {
       return next;
     },
     del: (key) => del(key, store),
+    clear: () => clear(store),
   };
 }
 

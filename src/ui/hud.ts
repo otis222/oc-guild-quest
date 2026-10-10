@@ -1,4 +1,4 @@
-// HTML 介面：右上的打招呼、天色按鈕，底部的「委託板」「OC 設定卡」，載入畫面。
+// HTML 介面：右上的打招呼、天色按鈕（研究模式多一顆「研究模式」），底部的「委託板」「OC 設定卡」，載入畫面。
 import { COPY } from './copy';
 
 export interface HudHandlers {
@@ -12,6 +12,8 @@ export interface Hud {
   onBoard(fn: () => void): void;
   /** 接上「OC 設定卡」按鈕 */
   onCard(fn: () => void): void;
+  /** 研究模式的入口按鈕（只有網址加 ?research=1 時才呼叫；一般網址不會有這顆按鈕） */
+  addResearch(fn: () => void): void;
   hideLoading(): void;
   /** 載入畫面改成顯示錯誤訊息，不關掉 */
   showError(text: string): void;
@@ -52,6 +54,16 @@ export function createHud(h: HudHandlers): Hud {
     onCard(fn) {
       btnCard.addEventListener('click', fn);
       btnCard.disabled = false;
+    },
+    addResearch(fn) {
+      const btn = document.createElement('button');
+      btn.type = 'button';
+      btn.id = 'btnResearch';
+      btn.textContent = COPY.research.button;
+      btn.addEventListener('click', fn);
+      btnTime.after(btn);
+      // 研究模式時上方按鈕列蓋在載入畫面上面：存檔讀不出來時也按得到，可以匯出資料
+      document.body.classList.add('is-research');
     },
     hideLoading() {
       loading.classList.add('hide');

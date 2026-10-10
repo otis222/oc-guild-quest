@@ -11,6 +11,7 @@ import { cellOf, monthDay } from './core/ocCard';
 import { pickGuildMembers, reassignMembers, uploadedPhotoId, uploadSpriteRef } from './core/oc';
 import { createGuildState, currentWork, findCommission, findLevel, loadState, saveState } from './core/state';
 import { createFpsGuard } from './core/fpsGuard';
+import { isResearchMode } from './core/research';
 import { deletePhoto, getPhoto, idbKV, putPhoto, requestPersistence, type KV } from './core/storage';
 import { createGuildStore, type GuildStore } from './core/store';
 import { commissionOfPhoto } from './core/submit';
@@ -73,6 +74,14 @@ async function main(): Promise<void> {
     onHello: () => lobby.helloAll(),
     onToggleTime: () => plaza.toggleTime(),
   });
+  // 研究模式：網址加 ?research=1 才有入口（企劃表 T7）。面板的程式按了才載入，一般網址不會下載
+  if (isResearchMode(location.search)) {
+    hud.addResearch(() => {
+      import('./ui/research')
+        .then(({ openResearch }) => openResearch({ kv, onCleared: () => location.reload() }))
+        .catch((err: unknown) => console.error('研究模式載入失敗', err));
+    });
+  }
 
   /** 讀好存檔（或建立 OC）之後才有；之前大廳只有場景 */
   let guild: Guild | null = null;

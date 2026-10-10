@@ -74,10 +74,12 @@ async function main(): Promise<void> {
     onHello: () => lobby.helloAll(),
     onToggleTime: () => plaza.toggleTime(),
   });
-  // 研究模式：網址加 ?research=1 才有入口（企劃表 T7）。面板的程式按了才載入，一般網址不會下載
+  // 研究模式：網址加 ?research=1 才有入口（企劃表 T7）。面板的程式只在研究模式下載（一般網址不會），
+  // 而且一進來就先開始下載：網路慢的時候，按按鈕才下載會等很久都沒反應
   if (isResearchMode(location.search)) {
+    const panel = import('./ui/research');
     hud.addResearch(() => {
-      import('./ui/research')
+      panel
         .then(({ openResearch }) => openResearch({ kv, onCleared: () => location.reload() }))
         .catch((err: unknown) => console.error('研究模式載入失敗', err));
     });

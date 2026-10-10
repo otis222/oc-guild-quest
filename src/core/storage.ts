@@ -56,3 +56,13 @@ export function getPhoto(kv: KV, id: string): Promise<Blob | undefined> {
 export function deletePhoto(kv: KV, id: string): Promise<void> {
   return kv.del(photoKey(id));
 }
+
+/**
+ * 請瀏覽器不要自動清掉這個網站的資料（Safari 會清一段時間沒用的網站）。回傳有沒有答應。
+ * 瀏覽器不支援或不答應都沒關係，資料照樣存；Firefox 桌機版可能會跳一次詢問。
+ */
+export async function requestPersistence(storage: StorageManager | undefined = globalThis.navigator?.storage): Promise<boolean> {
+  if (!storage?.persist) return false;
+  if (await storage.persisted()) return true;
+  return storage.persist();
+}

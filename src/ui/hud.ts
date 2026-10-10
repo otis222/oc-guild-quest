@@ -23,6 +23,14 @@ const $ = <T extends HTMLElement>(id: string): T => {
   return el as T;
 };
 
+/** 載入畫面改成顯示訊息，不關掉（不支援 WebGL2、啟動失敗、讀不到存檔）。大廳還沒建好也能用 */
+export function showLoadingMessage(text: string): void {
+  const loading = $('loading');
+  loading.textContent = text;
+  loading.classList.remove('hide');
+  loading.classList.add('error');
+}
+
 export function createHud(h: HudHandlers): Hud {
   const btnHi = $<HTMLButtonElement>('btnHi');
   btnHi.textContent = COPY.hud.hello;
@@ -48,10 +56,6 @@ export function createHud(h: HudHandlers): Hud {
     hideLoading() {
       loading.classList.add('hide');
     },
-    showError(text) {
-      loading.textContent = text;
-      loading.classList.remove('hide');
-      loading.classList.add('error');
-    },
+    showError: showLoadingMessage,
   };
 }

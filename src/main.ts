@@ -10,7 +10,8 @@ import type { SpriteManifest } from './core/manifest';
 import { cellOf, monthDay } from './core/ocCard';
 import { pickGuildMembers, reassignMembers, uploadedPhotoId, uploadSpriteRef } from './core/oc';
 import { createGuildState, currentWork, findCommission, findLevel, loadState, saveState } from './core/state';
-import { deletePhoto, getPhoto, idbKV, putPhoto, type KV } from './core/storage';
+import { createFpsGuard } from './core/fpsGuard';
+import { deletePhoto, getPhoto, idbKV, putPhoto, requestPersistence, type KV } from './core/storage';
 import { createGuildStore, type GuildStore } from './core/store';
 import { commissionOfPhoto } from './core/submit';
 import { elapsedMs, plannedMs, timerPhase } from './core/timer';
@@ -22,7 +23,7 @@ import { createExhibits, type Exhibits } from './scene/exhibits';
 import { Input } from './scene/input';
 import { createLobby, MEMBER_LABEL, type Lobby } from './scene/lobby';
 import { createPlaza, type Plaza } from './scene/plaza';
-import { createRenderers } from './scene/renderer';
+import { createRenderers, supportsWebGL2, type Renderers } from './scene/renderer';
 import { createShowcase } from './scene/showcase';
 import { loadManifest, loadTexture, spriteUrl } from './scene/sprites';
 import { createViewport } from './scene/viewport';
@@ -30,7 +31,7 @@ import { openBoard } from './ui/board';
 import { openChangeLook } from './ui/changeLook';
 import { COPY } from './ui/copy';
 import { showCreateOcCard, type SpriteChoice } from './ui/createOC';
-import { createHud } from './ui/hud';
+import { createHud, showLoadingMessage } from './ui/hud';
 import { openOcCard, type OcCardOptions } from './ui/ocCard';
 import { openPhotoViewer } from './ui/photoViewer';
 import { createPhotoUrls } from './ui/photos';
@@ -50,9 +51,18 @@ async function main(): Promise<void> {
 
   const stage = document.getElementById('stage');
   if (!stage) throw new Error('找不到 #stage');
+  // 不支援 WebGL2 的瀏覽器：顯示一句說明，不要白畫面（企劃表 T8）
+  if (!supportsWebGL2()) { showLoadingMessage(COPY.noWebGL); return; }
   const vp = createViewport(stage);
 
-  const gfx = await createRenderers(vp);
+  let gfx: Renderers;
+  try {
+    gfx = await createRenderers(vp);
+  } catch (err) {
+    console.error('WebGL 建立失敗', err);
+    showLoadingMessage(COPY.noWebGL);
+    return;
+  }
   const plaza = createPlaza();
   const board = createBoard(plaza.scene);
   const exhibits = createExhibits(plaza.pedestals);
@@ -88,10 +98,18 @@ async function main(): Promise<void> {
 
   // 大廳先動起來；第一次進入時，建立 OC 的卡片蓋在上面
   const clock = new THREE.Clock();
+  // FPS 連續 3 秒低於 40：關陰影、像素比降到 1（企劃表 T8，不做畫質設定頁）
+  const fpsGuard = createFpsGuard();
   let t = 0;
   function loop(): void {
-    const dt = Math.min(0.05, clock.getDelta());
+    const elapsed = clock.getDelta();
+    const dt = Math.min(0.05, elapsed);
     t += dt;
+    if (fpsGuard.tick(elapsed)) {
+      gfx.lowerQuality();
+      plaza.setShadows(false);
+      console.info('FPS 偏低，自動降低畫質（關陰影、像素比 1）');
+    }
     const player = lobby.player;
     if (input.updateKeys() && player && !lobby.working) player.manual = true;
     guild?.syncWork();
@@ -132,6 +150,9 @@ async function main(): Promise<void> {
   guild.syncWork(true);
   // 計時中重新整理：直接回到計時畫面（暫停中的就留在大廳，從委託板「回到任務」）
   guild.resumeIfRunning();
+  // 有存檔以後，請瀏覽器不要自動清掉資料（Playtest 要玩一週）
+  requestPersistence().then((ok) => console.info(ok ? '瀏覽器答應保留資料' : '瀏覽器沒有答應保留資料（資料照樣存著）'))
+    .catch(warn('請求保留資料失敗'));
 }
 
 interface Guild {
@@ -374,4 +395,7 @@ async function spawnCharacters(lobby: Lobby, kv: KV, manifest: SpriteManifest, o
   return { player, look };
 }
 
-void main();
+main().catch((err: unknown) => {
+  console.error('啟動失敗', err);
+  showLoadingMessage(COPY.startFailed);
+});

@@ -46,6 +46,8 @@ export interface Plaza {
   setRingColor(color: string | null): void;
   /** 招牌旁邊的公會等級牌（label 是「公會等級」這幾個字） */
   setGuildLevel(level: number, label: string): void;
+  /** 開關 3D 物件的陰影（FPS 太低時關掉；小人腳下的影子是貼圖，不受影響） */
+  setShadows(on: boolean): void;
   /** 切換白天／黃昏，回傳切換後是不是白天 */
   toggleTime(): boolean;
   /** 在地板上點的位置閃一下白圈 */
@@ -305,6 +307,10 @@ export function createPlaza(): Plaza {
       selRing.material.color.set(color ?? RING_COLOR);
     },
     setGuildLevel: drawBadge,
+    setShadows(on) {
+      // 光源不投影以後，three.js 會自己換掉著色器，不用再算陰影貼圖
+      sun.castShadow = on;
+    },
     toggleTime() {
       envTarget = envTarget === DAY ? DUSK : DAY;
       return envTarget === DAY;

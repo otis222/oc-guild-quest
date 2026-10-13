@@ -37,6 +37,7 @@ import { openOcCard, type OcCardOptions } from './ui/ocCard';
 import { openPhotoViewer } from './ui/photoViewer';
 import { createPhotoUrls } from './ui/photos';
 import { pieResult } from './ui/pie';
+import { openSheetGame } from './ui/sheetGame';
 import { openSubmit } from './ui/submit';
 import { openTimer } from './ui/timer';
 import { showCardToast } from './ui/toast';
@@ -197,7 +198,7 @@ interface GuildDeps {
   exhibits: Exhibits;
 }
 
-/** 存檔準備好之後：委託板、任務計時、OC 設定卡、換造型、交件、展品、主角做任務的樣子 */
+/** 存檔準備好之後：委託板、任務計時、OC 設定卡、換造型、交件、加分關、展品、主角做任務的樣子 */
 function startGuild({ kv, manifest, store, lobby, player, look: initialLook, plaza, exhibits }: GuildDeps): Guild {
   const actions = createActions(kv, store);
   const wakeLock = createWakeLock();
@@ -315,13 +316,32 @@ function startGuild({ kv, manifest, store, lobby, player, look: initialLook, pla
     showTimer(commissionId, levelId);
   }
 
-  return {
-    openBoard: () => openBoard({
+  function showBoard(): void {
+    openBoard({
       store,
       createCommission: (draft) => actions.createCommission(draft),
       openTask: (cId, lId) => { openTask(cId, lId).catch((err: unknown) => console.error('開始任務失敗', err)); },
       openSubmit: showSubmit,
-    }),
+      openBonus: showBonus,
+    });
+  }
+
+  /** 平面構成的加分關（設定圖急救，企劃表 T9）：從委託板打開，關掉後回到委託板 */
+  function showBonus(commissionId: string): void {
+    const plate = store.state.oc.nameplatePhotoId;
+    openSheetGame({
+      store, commissionId,
+      ocImage: look.url,
+      nameplate: plate ? photos.get(plate) : Promise.resolve(null),
+      onStart: () => { void actions.startBonus(commissionId); },
+      finish: (result) => actions.finishBonus(commissionId, result),
+      saveQuote: (quote) => { actions.setOcQuote(quote).catch(warn('台詞沒存到')); },
+      onClosed: showBoard,
+    });
+  }
+
+  return {
+    openBoard: showBoard,
     openExhibit(slot) {
       const photoId = store.state.exhibits[slot];
       if (!photoId) return;

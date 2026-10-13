@@ -22,6 +22,8 @@ export const EVENT_LABELS: Readonly<Record<EventType, string>> = {
   exhibit_opened: '看展品',
   oc_changed: '換造型',
   course_created: '新增課程',
+  bonus_started: '開始加分關',
+  bonus_finished: '加分關計分',
 };
 
 const pad = (n: number): string => String(n).padStart(2, '0');

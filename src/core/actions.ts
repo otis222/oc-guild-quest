@@ -1,5 +1,6 @@
 // 玩家的操作：改狀態 → 存檔 → 記事件（企劃表 7.6）。
 // 事件只在狀態真的有變時才記：連按兩次「完成」、或兩個分頁都按，也只記一次、只點亮一片。
+import { recordBonus, setOcQuote } from './bonus';
 import { courseInfo } from './courses';
 import { logEvent, type EventFields } from './events';
 import { newId } from './id';
@@ -22,6 +23,18 @@ export interface SubmitInput {
   nameplate?: Blob;
 }
 
+/** 加分關（設定圖急救）按「完成排版」時的結果 */
+export interface BonusResult {
+  /** 0～100 */
+  score: number;
+  /** 做到的規則（sheet.ts 的 SheetRuleId） */
+  passed: readonly string[];
+  /** 從這一局開始到按「完成排版」花了多久 */
+  ms: number;
+  /** 移動小卡幾次（拖曳、點一下放進格線、方向鍵） */
+  moves: number;
+}
+
 export interface Actions {
   /** 接新委託（委託單上新加的課程一起建立），回傳委託 id */
   createCommission(draft: CommissionDraft): Promise<string>;
@@ -42,6 +55,12 @@ export interface Actions {
   submitCommission(commissionId: string, input: SubmitInput): Promise<boolean>;
   /** 點大廳展台上的展品（放大看） */
   noteExhibitOpened(slot: number, photoId: string): Promise<void>;
+  /** 開始一局加分關（打開設定圖急救、或按「再排一次」） */
+  startBonus(commissionId: string): Promise<void>;
+  /** 加分關計分：記下這張委託的最高分，回傳最高分 */
+  finishBonus(commissionId: string, result: BonusResult): Promise<number>;
+  /** 改 OC 的台詞（設定圖上的台詞卡）；回傳有沒有變 */
+  setOcQuote(quote: string): Promise<boolean>;
 }
 
 type LevelOp = (s: GuildState, commissionId: string, levelId: string, now: number) => GuildState;
@@ -155,6 +174,23 @@ export function createActions(kv: KV, store: GuildStore, clock: () => number = D
     async noteExhibitOpened(slot, photoId) {
       const c = commissionOfPhoto(store.state, photoId);
       await log('exhibit_opened', { ...(c ? { commissionId: c.id } : {}), data: { slot, photoId } }, clock());
+    },
+
+    async startBonus(cId) {
+      await log('bonus_started', { commissionId: cId }, clock());
+    },
+
+    async finishBonus(cId, r) {
+      const now = clock();
+      const { after } = await apply((s) => recordBonus(s, cId, r.score));
+      const best = findCommission(after, cId).bonusBest ?? r.score;
+      await log('bonus_finished', { commissionId: cId, data: { score: r.score, best, passed: [...r.passed], ms: r.ms, moves: r.moves } }, now);
+      return best;
+    },
+
+    async setOcQuote(quote) {
+      const { before, after } = await apply((s) => setOcQuote(s, quote));
+      return before !== after;
     },
   };
 }

@@ -153,6 +153,50 @@ export const COPY = {
     caption: (course: string, work: string, md: string) => `${course}・${work}　${md} 交件`,
   },
 
+  /** 平面構成的加分關：設定圖急救（企劃表 T9） */
+  bonus: {
+    /** 委託卡上的按鈕（部位是版面的委託，計時任務都完成以後才有） */
+    button: (best?: number) => (best === undefined ? '加分關' : `加分關 ${best} 分`),
+    title: '設定圖急救',
+    hint: '設定圖亂掉了。把小卡拖進格線排好。',
+    keysHint: '選一張小卡，用方向鍵一次移一格。',
+    sheetAria: 'OC 設定圖的格線',
+    cards: { name: '名字', quote: '台詞', front: '正面', side: '側面', back: '背面' },
+    cardAt: (card: string, col: number, row: number) => `${card}：第 ${col} 欄、第 ${row} 列`,
+    cardLoose: (card: string) => `${card}：還沒放進格線`,
+    /** 台詞卡上還沒寫的時候 */
+    quoteEmpty: '（寫一句台詞）',
+    quote: '台詞',
+    quotePlaceholder: (max: number) => `OC 的一句話，最多 ${max} 字`,
+    now: (score: number) => `目前 ${score} 分`,
+    groups: { align: '對齊', space: '留白' },
+    rules: {
+      feet: '三視圖腳底對齊',
+      text: '名字和台詞對齊',
+      spacing: '三視圖等距排開',
+      overlap: '小卡沒有疊在一起',
+      breath: '文字和三視圖隔一格',
+      close: '名字和台詞靠在一起',
+    },
+    ruleDone: '做到了',
+    ruleTodo: '還沒做到',
+    alignNote: '對齊可以靠左、置中或靠右。',
+    finish: '完成排版',
+    finishing: '計分中…',
+    loose: (n: number) => `還有 ${n} 張小卡沒放進格線。`,
+    cancel: '先不玩',
+    score: (score: number) => `${score} 分`,
+    result: {
+      perfect: '設定圖救回來了。對齊和留白都到位。',
+      good: '差一點就滿分。看看還沒打勾的那幾項。',
+      retry: '還有幾張小卡沒站好。照沒打勾的再排一次。',
+    },
+    best: (score: number) => `這張委託的加分關最高 ${score} 分`,
+    again: '再排一次',
+    back: '回委託板',
+    saveFailed: '分數沒記到，再按一次。',
+  },
+
   /** 換造型 */
   look: {
     title: '換造型',

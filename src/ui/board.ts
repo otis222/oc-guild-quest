@@ -1,6 +1,8 @@
 // 委託板：進行中的委託、接新委託、完成的委託（摺疊）。
 // 委託卡只寫學校作業：課程、作業名稱、截止倒數、進度、開始任務按鈕，不放其他說明文字。
+// 部位是版面的委託（平面構成），計時任務都完成後多一顆「加分關」按鈕（T9），交件後也還在。
 // 委託單上可以新加一門課（取名字、選交件後解鎖什麼），接下委託時一起存。
+import { bonusUnlocked } from '../core/bonus';
 import { allCourses, COURSE_NAME_MAX, courseInfo, type CourseInfo } from '../core/courses';
 import {
   addLevel, canAddLevel, canMoveLevel, canRemoveLevel, COMMISSION_TITLE_MAX, draftProblem, LEVEL_TITLE_MAX, moveLevel,
@@ -25,6 +27,8 @@ export interface BoardDeps {
   openTask(commissionId: string, levelId: string): void;
   /** 任務都做完了：打開交件畫面（委託板會被換掉） */
   openSubmit(commissionId: string): void;
+  /** 加分關：打開設定圖急救（委託板會被換掉，關掉後回到委託板） */
+  openBonus(commissionId: string): void;
 }
 
 /** 開著的時候多久更新一次倒數 */
@@ -44,7 +48,7 @@ export function openBoard(deps: BoardDeps): void {
     dialog.setTitle(T.title);
     const s = deps.store.state, now = Date.now();
     const active = activeCommissions(s), done = completedCommissions(s);
-    const card = (c: Commission): HTMLLIElement => commissionCard(c, courseInfo(s, c.course).label, now, deps);
+    const card = (c: Commission): HTMLLIElement => commissionCard(c, courseInfo(s, c.course), now, deps);
     dialog.body.replaceChildren(
       on(el('button', { type: 'button', class: 'primary' }, T.newCommission), 'click', showForm),
       el('h3', { class: 'section-title' }, T.active(active.length)),
@@ -75,21 +79,24 @@ function taskButton(c: Commission, next: Level, deps: BoardDeps): HTMLButtonElem
   return on(el('button', { type: 'button', class: 'c-start' }, label), 'click', () => deps.openTask(c.id, next.id));
 }
 
-function commissionCard(c: Commission, course: string, now: number, deps: BoardDeps): HTMLLIElement {
+function commissionCard(c: Commission, course: CourseInfo, now: number, deps: BoardDeps): HTMLLIElement {
   const { done, total } = timedProgress(c);
   const submitted = isSubmitted(c);
   const overdue = !submitted && isOverdue(c.dueAt, now);
   const next = nextLevel(c);
   const segs = el('span', { class: 'segs', 'aria-hidden': 'true' },
     ...Array.from({ length: total }, (_, i) => el('span', { class: i < done ? 'seg on' : 'seg' })));
+  const bonus = bonusUnlocked(c, course.part)
+    ? on(el('button', { type: 'button', class: 'c-bonus' }, COPY.bonus.button(c.bonusBest)), 'click', () => deps.openBonus(c.id))
+    : null;
   return el('li', { class: overdue ? 'commission is-overdue' : 'commission' },
     el('div', { class: 'c-row' },
-      el('span', { class: 'c-course' }, course),
+      el('span', { class: 'c-course' }, course.label),
       el('span', { class: 'c-due' }, submitted ? T.submitted : dueCountdown(c.dueAt, now))),
     el('div', { class: 'c-title' }, c.title),
     el('div', { class: 'c-row' },
       el('span', { class: 'c-progress', 'aria-label': T.progress(done, total) }, segs, `${done}/${total}`),
-      !submitted && next ? taskButton(c, next, deps) : null),
+      el('span', { class: 'c-actions' }, bonus, !submitted && next ? taskButton(c, next, deps) : null)),
   );
 }
 

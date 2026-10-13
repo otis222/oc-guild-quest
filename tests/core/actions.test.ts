@@ -143,6 +143,41 @@ describe('委託與任務的操作', () => {
   });
 });
 
+describe('加分關（設定圖急救）', () => {
+  const result = (score: number) => ({ score, passed: ['feet', 'text'], ms: 42_000, moves: 9 });
+
+  it('開始記 bonus_started；計分記 bonus_finished，存下最高分', async () => {
+    const { actions, cId, store, kv, clock } = await setup();
+    await actions.startBonus(cId);
+    expect(await actions.finishBonus(cId, result(65))).toBe(65);
+    expect(store.state.commissions[0].bonusBest).toBe(65);
+    expect((await loadState(kv))!.commissions[0].bonusBest).toBe(65);
+    const events = (await loadEvents(kv)).slice(-2);
+    expect(events[0]).toEqual({ t: clock.now, type: 'bonus_started', commissionId: cId });
+    expect(events[1]).toEqual({
+      t: clock.now, type: 'bonus_finished', commissionId: cId,
+      data: { score: 65, best: 65, passed: ['feet', 'text'], ms: 42_000, moves: 9 },
+    });
+  });
+
+  it('第二次比較低：最高分不變，事件照記這次的分數', async () => {
+    const { actions, cId, store, kv } = await setup();
+    await actions.finishBonus(cId, result(85));
+    expect(await actions.finishBonus(cId, result(50))).toBe(85);
+    expect(store.state.commissions[0].bonusBest).toBe(85);
+    expect((await loadEvents(kv)).at(-1)?.data).toMatchObject({ score: 50, best: 85 });
+  });
+
+  it('改台詞：存進 OC，不記事件；一樣的不算有變', async () => {
+    const { actions, store, kv, types } = await setup();
+    expect(await actions.setOcQuote('今天也要畫圖')).toBe(true);
+    expect(store.state.oc.quote).toBe('今天也要畫圖');
+    expect((await loadState(kv))!.oc.quote).toBe('今天也要畫圖');
+    expect(await actions.setOcQuote(' 今天也要畫圖 ')).toBe(false);
+    expect(await types()).toEqual(['commission_created']);
+  });
+});
+
 describe('交件與展品', () => {
   const jpeg = (text: string): Blob => new Blob([text], { type: 'image/jpeg' });
   const photoKeys = (kv: { raw: Map<string, unknown> }): string[] => [...kv.raw.keys()].filter((k) => k.startsWith('photo:'));

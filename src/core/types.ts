@@ -41,6 +41,7 @@ export interface Commission {
   photoId?: string;           // 交件照片
   palette?: string[];         // 部位是配色：交件照片抽出的色（T6 加的，7.2 沒有）
   nameplatePhotoId?: string;  // 部位是名牌：從交件照片裁出來的名牌圖（T6 加的，7.2 沒有）
+  bonusBest?: number;         // 部位是版面：加分關（設定圖急救）的最高分 0–100（T9 加的，7.2 沒有）
   cellIndex: number;          // 佔設定卡該區的第幾格（0–2，滿了往下一輪）
 }
 
@@ -52,6 +53,7 @@ export interface OCProfile {
   nameplatePhotoId?: string;  // 名牌（字體設計）
   layoutPhotoId?: string;     // 版面（平面構成）
   sketchPhotoId?: string;     // 草稿（手繪基礎）
+  quote?: string;             // OC 的台詞：設定圖急救的台詞卡，玩家自己寫（T9 加的，7.2 沒有）
 }
 
 export interface GuildState {
@@ -69,7 +71,9 @@ export type EventType =
   | 'level_paused' | 'level_resumed' | 'level_extended' | 'level_completed'
   | 'photo_added' | 'commission_submitted' | 'oc_card_opened' | 'exhibit_opened'
   | 'oc_changed'               // T5 加的：在設定卡換造型（7.2 沒有）
-  | 'course_created';          // 接委託時新增自訂課程（7.2 沒有）
+  | 'course_created'           // 接委託時新增自訂課程（7.2 沒有）
+  | 'bonus_started'            // T9 加的：開始一局加分關（設定圖急救）（7.2 沒有）
+  | 'bonus_finished';          // T9 加的：加分關按「完成排版」計分（7.2 沒有）
 
 export interface LogEvent {
   t: number;

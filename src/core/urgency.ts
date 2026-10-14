@@ -32,3 +32,22 @@ export function paperUrgency(c: Commission, now: number): PaperUrgency {
   if (isOverdue(c.dueAt, now)) return 'overdue';
   return c.dueAt - now < SOON_WITHIN_MS ? 'soon' : 'calm';
 }
+
+/** 3D 委託板上最多釘幾張紙 */
+export const BOARD_PAPERS_MAX = 6;
+
+/** 委託板上的一張紙（顏色由畫面決定） */
+export interface BoardPaper {
+  commissionId: string;
+  title: string;
+  course: Commission['course'];
+  dueAt: number;
+  urgency: PaperUrgency;
+}
+
+/** 委託板上要釘的紙：還沒交件的委託，截止早的在前，最多 6 張 */
+export function boardPapers(s: GuildState, now: number, max = BOARD_PAPERS_MAX): BoardPaper[] {
+  return activeCommissions(s).slice(0, max).map((c) => ({
+    commissionId: c.id, title: c.title, course: c.course, dueAt: c.dueAt, urgency: paperUrgency(c, now),
+  }));
+}

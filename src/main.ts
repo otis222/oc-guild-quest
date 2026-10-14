@@ -16,9 +16,10 @@ import { deletePhoto, getPhoto, idbKV, putPhoto, requestPersistence, type KV } f
 import { createGuildStore, type GuildStore } from './core/store';
 import { commissionOfPhoto } from './core/submit';
 import { elapsedMs, plannedMs, timerPhase } from './core/timer';
-import { duskChange, needsDusk } from './core/urgency';
+import { boardPapers, duskChange, needsDusk } from './core/urgency';
+import { dueCountdown } from './core/due';
 import type { Commission, GuildState, OCProfile } from './core/types';
-import { createBoard } from './scene/board';
+import { createBoard, type Board } from './scene/board';
 import { CameraRig } from './scene/camera';
 import type { Chibi, ChibiWorld } from './scene/chibi';
 import { createExhibits, type Exhibits } from './scene/exhibits';
@@ -37,7 +38,7 @@ import { createHud, showLoadingMessage, type Hud } from './ui/hud';
 import { openOcCard, type OcCardOptions } from './ui/ocCard';
 import { openPhotoViewer } from './ui/photoViewer';
 import { createPhotoUrls } from './ui/photos';
-import { pieResult } from './ui/pie';
+import { courseColor, pieResult } from './ui/pie';
 import { openSheetGame } from './ui/sheetGame';
 import { openSubmit } from './ui/submit';
 import { openTimer } from './ui/timer';
@@ -129,6 +130,7 @@ async function main(): Promise<void> {
 
     plaza.update(dt, t, player ? player.pos : null);
     exhibits.update(t);
+    board.update(t);
     rig.update(dt, t, player ? player.pos : ORIGIN);
     lobby.update(dt, t, input.keyDir);
 
@@ -157,7 +159,7 @@ async function main(): Promise<void> {
   hud.hideLoading();
   if (isNew) player.hop();
 
-  guild = startGuild({ kv, manifest, store: createGuildStore(kv, state), lobby, player, look, plaza, exhibits, hud });
+  guild = startGuild({ kv, manifest, store: createGuildStore(kv, state), lobby, player, look, plaza, exhibits, hud, board });
   hud.onBoard(guild.openBoard);
   hud.onCard(guild.openCard);
   guild.syncWork(true);
@@ -200,13 +202,14 @@ interface GuildDeps {
   plaza: Plaza;
   exhibits: Exhibits;
   hud: Hud;
+  board: Board;
 }
 
-/** 截止前一天大廳變黃昏（T12）：多久重新檢查一次（頁面開著跨過「剩 24 小時」那一刻也會變） */
-const DUSK_CHECK_MS = 60_000;
+/** 跟著截止時間變的大廳（T12 天色、T13 委託板上的紙）多久重新檢查一次：頁面開著跨過門檻那一刻也會變 */
+const AMBIENT_CHECK_MS = 60_000;
 
 /** 存檔準備好之後：委託板、任務計時、OC 設定卡、換造型、交件、加分關、展品、主角做任務的樣子、截止前的天色 */
-function startGuild({ kv, manifest, store, lobby, player, look: initialLook, plaza, exhibits, hud }: GuildDeps): Guild {
+function startGuild({ kv, manifest, store, lobby, player, look: initialLook, plaza, exhibits, hud, board }: GuildDeps): Guild {
   const actions = createActions(kv, store);
   const wakeLock = createWakeLock();
   const photos = createPhotoUrls(kv);
@@ -227,9 +230,17 @@ function startGuild({ kv, manifest, store, lobby, player, look: initialLook, pla
     plaza.setTime(change === 'day');
     hud.showTime(change === 'day');
   };
-  store.subscribe(syncDusk);
-  setInterval(syncDusk, DUSK_CHECK_MS);
-  syncDusk();
+  // 3D 委託板上釘著進行中的委託（T13）：快截止的變粉紅、逾期的變紅
+  const syncPapers = (): void => {
+    const s = store.state, now = Date.now();
+    board.setPapers(boardPapers(s, now).map((p) => ({
+      key: p.commissionId, title: p.title, color: courseColor(courseInfo(s, p.course)), due: dueCountdown(p.dueAt, now), urgency: p.urgency,
+    })));
+  };
+  const syncAmbient = (): void => { syncDusk(); syncPapers(); };
+  store.subscribe(syncAmbient);
+  setInterval(syncAmbient, AMBIENT_CHECK_MS);
+  syncAmbient();
 
   const showCard = (opts: OcCardOptions = {}): void => openOcCard({
     store, photos,

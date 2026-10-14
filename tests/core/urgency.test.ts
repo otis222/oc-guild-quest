@@ -2,7 +2,7 @@ import { describe, expect, it } from 'vitest';
 import { addCommission, createGuildState } from '../../src/core/state';
 import { submitCommission } from '../../src/core/submit';
 import { templateLevels } from '../../src/core/templates';
-import { duskChange, needsDusk, paperUrgency } from '../../src/core/urgency';
+import { boardPapers, duskChange, needsDusk, paperUrgency } from '../../src/core/urgency';
 import type { GuildState } from '../../src/core/types';
 
 const HOUR = 3_600_000;
@@ -45,5 +45,17 @@ describe('委託板上的紙', () => {
     expect(paperUrgency(c(NOW + 1), NOW)).toBe('soon');
     expect(paperUrgency(c(NOW), NOW)).toBe('overdue');
     expect(paperUrgency(c(NOW - 3 * HOUR), NOW)).toBe('overdue');
+  });
+
+  it('要釘的紙：還沒交件的，截止早的在前，最多 6 張', () => {
+    let s = createGuildState(OC, 0);
+    const dues = [90, 5, 30, -2, 60, 120, 200, 70];
+    dues.forEach((h, i) => { s = withDue(s, `c${i}`, NOW + h * HOUR); });
+    s = submitCommission(s, 'c1', { photoId: 'p', palette: ['#123456'] }, NOW);
+    const papers = boardPapers(s, NOW);
+    expect(papers.map((p) => p.commissionId)).toEqual(['c3', 'c2', 'c4', 'c7', 'c0', 'c5']);
+    expect(papers.map((p) => p.urgency)).toEqual(['overdue', 'soon', 'calm', 'calm', 'calm', 'calm']);
+    expect(papers[0]).toMatchObject({ title: 'c3', course: 'color', dueAt: NOW - 2 * HOUR });
+    expect(boardPapers(createGuildState(OC, 0), NOW)).toEqual([]);
   });
 });

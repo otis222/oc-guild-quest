@@ -2,6 +2,12 @@
 // 要改用詞，改這個檔就好。
 // 課程名稱、部位名稱（名牌、配色…）和預設任務名稱在 src/core/templates.ts。
 
+/** 畫圖時間有多少：整分鐘寫「15 分鐘」，有零頭寫「12 分 30 秒」（秒數無條件捨去） */
+const drawAmount = (ms: number): string => {
+  const total = Math.floor(Math.max(0, ms) / 1000), m = Math.floor(total / 60), s = total % 60;
+  return s ? `${m} 分 ${s} 秒` : `${m} 分鐘`;
+};
+
 export const COPY = {
   hud: {
     hello: '跟夥伴打招呼',
@@ -213,6 +219,30 @@ export const COPY = {
     again: '再排一次',
     back: '回委託板',
     saveFailed: '分數沒記到，再按一次。',
+  },
+
+  /** 作業換畫圖時間（企劃表 T17）：完成一個任務存 5 分鐘 */
+  draw: {
+    title: '畫圖時間',
+    heading: '畫自己想畫的',
+    bank: (ms: number) => `存了 ${drawAmount(ms)}`,
+    planned: (ms: number) => `這次可以畫 ${drawAmount(ms)}`,
+    none: '完成一個任務，存 5 分鐘。',
+    drawingNow: '畫圖中',
+    start: '開始畫圖',
+    back: '回到畫圖',
+    pause: '休息一下',
+    resume: '繼續畫圖',
+    finishEarly: '提早結束',
+    paused: '休息中',
+    timeUp: '時間到',
+    timeUpNote: '畫圖時間用完了。完成任務可以再存。',
+    done: '回大廳',
+    failed: '沒記到，再按一次。',
+    /** 完成任務後的小提示 */
+    earned: (min: number, bankMs: number) => `畫圖時間 +${min} 分鐘・存了 ${drawAmount(bankMs)}`,
+    /** 開始畫圖時主角說的話 */
+    speech: '來畫圖吧',
   },
 
   /** 色彩學的加分關：配色急救（企劃表 T16） */

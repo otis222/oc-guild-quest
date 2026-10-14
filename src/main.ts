@@ -16,6 +16,7 @@ import { deletePhoto, getPhoto, idbKV, putPhoto, requestPersistence, type KV } f
 import { createGuildStore, type GuildStore } from './core/store';
 import { commissionOfPhoto } from './core/submit';
 import { elapsedMs, plannedMs, timerPhase } from './core/timer';
+import { duskChange, needsDusk } from './core/urgency';
 import type { Commission, GuildState, OCProfile } from './core/types';
 import { createBoard } from './scene/board';
 import { CameraRig } from './scene/camera';
@@ -32,7 +33,7 @@ import { openBoard } from './ui/board';
 import { openChangeLook } from './ui/changeLook';
 import { COPY } from './ui/copy';
 import { showCreateOcCard, type SpriteChoice } from './ui/createOC';
-import { createHud, showLoadingMessage } from './ui/hud';
+import { createHud, showLoadingMessage, type Hud } from './ui/hud';
 import { openOcCard, type OcCardOptions } from './ui/ocCard';
 import { openPhotoViewer } from './ui/photoViewer';
 import { createPhotoUrls } from './ui/photos';
@@ -156,7 +157,7 @@ async function main(): Promise<void> {
   hud.hideLoading();
   if (isNew) player.hop();
 
-  guild = startGuild({ kv, manifest, store: createGuildStore(kv, state), lobby, player, look, plaza, exhibits });
+  guild = startGuild({ kv, manifest, store: createGuildStore(kv, state), lobby, player, look, plaza, exhibits, hud });
   hud.onBoard(guild.openBoard);
   hud.onCard(guild.openCard);
   guild.syncWork(true);
@@ -198,10 +199,14 @@ interface GuildDeps {
   look: Look;
   plaza: Plaza;
   exhibits: Exhibits;
+  hud: Hud;
 }
 
-/** 存檔準備好之後：委託板、任務計時、OC 設定卡、換造型、交件、加分關、展品、主角做任務的樣子 */
-function startGuild({ kv, manifest, store, lobby, player, look: initialLook, plaza, exhibits }: GuildDeps): Guild {
+/** 截止前一天大廳變黃昏（T12）：多久重新檢查一次（頁面開著跨過「剩 24 小時」那一刻也會變） */
+const DUSK_CHECK_MS = 60_000;
+
+/** 存檔準備好之後：委託板、任務計時、OC 設定卡、換造型、交件、加分關、展品、主角做任務的樣子、截止前的天色 */
+function startGuild({ kv, manifest, store, lobby, player, look: initialLook, plaza, exhibits, hud }: GuildDeps): Guild {
   const actions = createActions(kv, store);
   const wakeLock = createWakeLock();
   const photos = createPhotoUrls(kv);
@@ -211,6 +216,20 @@ function startGuild({ kv, manifest, store, lobby, player, look: initialLook, pla
   const syncShowcase = createShowcase({ plaza, exhibits, player, photoUrl: photos.get, levelLabel: COPY.hud.guildLevel });
   store.subscribe(syncShowcase);
   syncShowcase(store.state);
+
+  // 有委託剩不到 24 小時就變黃昏（T12）。只在「變急／不急了」那一刻切換，手動切的天色在下次改變之前不會被蓋掉
+  let urgent: boolean | null = null;
+  const syncDusk = (): void => {
+    const next = needsDusk(store.state, Date.now());
+    const change = duskChange(urgent, next);
+    urgent = next;
+    if (!change) return;
+    plaza.setTime(change === 'day');
+    hud.showTime(change === 'day');
+  };
+  store.subscribe(syncDusk);
+  setInterval(syncDusk, DUSK_CHECK_MS);
+  syncDusk();
 
   const showCard = (opts: OcCardOptions = {}): void => openOcCard({
     store, photos,

@@ -50,6 +50,8 @@ export interface Plaza {
   setShadows(on: boolean): void;
   /** 切換白天／黃昏，回傳切換後是不是白天 */
   toggleTime(): boolean;
+  /** 直接設成白天或黃昏（截止前一天自動變黃昏，T12）；會慢慢變過去 */
+  setTime(day: boolean): void;
   /** 在地板上點的位置閃一下白圈 */
   showMarker(x: number, z: number): void;
   /** 每幀更新：天色漸變、水滴、寶石、雲、石頭、選取光圈（selectedPos 是 null 時不顯示光圈） */
@@ -314,6 +316,9 @@ export function createPlaza(): Plaza {
     toggleTime() {
       envTarget = envTarget === DAY ? DUSK : DAY;
       return envTarget === DAY;
+    },
+    setTime(day) {
+      envTarget = day ? DAY : DUSK;
     },
     showMarker(x, z) {
       marker.position.set(x, 0.035, z); markerT = 0;

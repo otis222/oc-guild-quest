@@ -14,6 +14,8 @@ export interface Hud {
   onCard(fn: () => void): void;
   /** 研究模式的入口按鈕（只有網址加 ?research=1 時才呼叫；一般網址不會有這顆按鈕） */
   addResearch(fn: () => void): void;
+  /** 天色不是按按鈕變的時候（截止前一天自動變黃昏，T12），按鈕上的字跟著換 */
+  showTime(day: boolean): void;
   hideLoading(): void;
   /** 載入畫面改成顯示錯誤訊息，不關掉 */
   showError(text: string): void;
@@ -38,10 +40,9 @@ export function createHud(h: HudHandlers): Hud {
   btnHi.textContent = COPY.hud.hello;
   btnHi.addEventListener('click', () => h.onHello());
   const btnTime = $<HTMLButtonElement>('btnTime');
-  btnTime.textContent = COPY.hud.toDusk;
-  btnTime.addEventListener('click', () => {
-    btnTime.textContent = h.onToggleTime() ? COPY.hud.toDusk : COPY.hud.toDay;
-  });
+  const showTime = (day: boolean): void => { btnTime.textContent = day ? COPY.hud.toDusk : COPY.hud.toDay; };
+  showTime(true);
+  btnTime.addEventListener('click', () => showTime(h.onToggleTime()));
 
   const loading = $('loading');
   const btnBoard = $<HTMLButtonElement>('btnBoard');
@@ -65,6 +66,7 @@ export function createHud(h: HudHandlers): Hud {
       // 研究模式時上方按鈕列蓋在載入畫面上面：存檔讀不出來時也按得到，可以匯出資料
       document.body.classList.add('is-research');
     },
+    showTime,
     hideLoading() {
       loading.classList.add('hide');
     },

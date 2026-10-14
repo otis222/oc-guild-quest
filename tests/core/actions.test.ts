@@ -174,6 +174,26 @@ describe('加分關', () => {
     });
   });
 
+  it('設定圖急救帶著排法：記成 OC 設定圖成品的排法；配色急救不會記', async () => {
+    const { actions, cId, store } = await setup();
+    const positions = {
+      name: { x: 0, y: 0 }, quote: { x: 0, y: 1 }, front: { x: 0, y: 3 }, side: { x: 3, y: 3 }, back: { x: 6, y: 3 },
+    };
+    await actions.finishBonus(cId, 'palette', { ...result(100), positions });
+    expect(store.state.oc.sheetBest).toBeUndefined();
+    await actions.finishBonus(cId, 'sheet', { ...result(80), positions });
+    expect(store.state.oc.sheetBest).toMatchObject({ positions, score: 80 });
+  });
+
+  it('看設定圖、存設定圖都記事件', async () => {
+    const { actions, kv } = await setup();
+    await actions.noteSheetOpened();
+    await actions.noteSheetSaved('share');
+    const events = (await loadEvents(kv)).slice(-2);
+    expect(events[0]).toMatchObject({ type: 'sheet_opened', data: { parts: [], fromGame: false } });
+    expect(events[1]).toMatchObject({ type: 'sheet_saved', data: { method: 'share' } });
+  });
+
   it('第二次比較低：最高分不變，事件照記這次的分數', async () => {
     const { actions, cId, store, kv } = await setup();
     await actions.finishBonus(cId, 'sheet', result(85));

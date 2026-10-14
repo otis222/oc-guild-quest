@@ -1,5 +1,6 @@
 // OC 設定卡：上面是主角圖、名字、公會等級、完成度、換造型、作品集，下面一排是 OC 目前的部件（名牌、配色、版面、草稿）；
-// 再下面是畫圖時間（T17：存了多少、開始畫圖），然後一門課一區（內建 4 門＋自訂課程）× 每區 3 格。一格是一張委託（見 pie.ts）。
+// 再下面是「看設定圖」（T18 成品）、畫圖時間（T17：存了多少、開始畫圖），然後一門課一區（內建 4 門＋自訂課程）× 每區 3 格。
+// 一格是一張委託（見 pie.ts）。
 // 點任何一片，看得到是哪一天、哪張委託的哪個任務；交件的格子中間是作業成果，點了放大看照片。
 // 從大廳小提示打開時，剛完成的那一片（交件的話是整格）播點亮動畫（0.8 秒內）。
 import { drawBankMs } from '../core/drawTime';
@@ -27,6 +28,8 @@ export interface OcCardDeps {
   /** 按「開始畫圖」、「回到畫圖」（T17） */
   onStartDrawing(): void;
   onOpenDrawing(): void;
+  /** 按「看設定圖」（T18） */
+  onOpenSheet(): void;
   /** 點交件的作業（格子中間、部件格）：放大看照片 */
   onViewWork(commission: Commission): void;
 }
@@ -80,7 +83,8 @@ function show(deps: OcCardDeps, opts: OcCardOptions): void {
           on(el('button', { type: 'button', class: 'oc-change' }, C.changeLook), 'click', () => deps.onChangeLook()),
           on(el('button', { type: 'button', class: 'oc-gallery' }, COPY.gallery.open(galleryWorks(s).length)), 'click', () => deps.onOpenGallery()))));
     const sections = card.sections.map((sec) => sectionView(sec, deps, first ? opts.highlight : undefined));
-    dialog.body.replaceChildren(head, partsRow(s, deps), drawRow(s, deps), ...sections.map((x) => x.element));
+    const sheet = on(el('button', { type: 'button', class: 'oc-sheet' }, COPY.charSheet.open), 'click', () => deps.onOpenSheet());
+    dialog.body.replaceChildren(head, partsRow(s, deps), sheet, drawRow(s, deps), ...sections.map((x) => x.element));
     // 捲到剛點亮的那一區，連下面那行說明一起看得到（自訂課程的區在最下面）
     if (first) sections.find((x) => x.highlighted)?.element.scrollIntoView({ block: 'nearest' });
   }

@@ -37,6 +37,7 @@ import { openBoard } from './ui/board';
 import { openChangeLook } from './ui/changeLook';
 import { COPY } from './ui/copy';
 import { showCreateOcCard, type SpriteChoice } from './ui/createOC';
+import { openCharSheet } from './ui/charSheet';
 import { openDrawTimer } from './ui/drawTimer';
 import { openGallery } from './ui/gallery';
 import { createHud, showLoadingMessage, type Hud } from './ui/hud';
@@ -271,7 +272,18 @@ function startGuild({ kv, manifest, store, lobby, player, look: initialLook, pla
     onOpenGallery: () => showGallery('card'),
     onStartDrawing: () => { startDrawing().catch(warn('開始畫圖失敗')); },
     onOpenDrawing: () => showDraw(),
+    onOpenSheet: () => showCharSheet(),
   }, opts);
+
+  /** OC 設定圖成品（T18）：從設定卡打開，關掉回到設定卡 */
+  function showCharSheet(): void {
+    void actions.noteSheetOpened();
+    openCharSheet({
+      store, photos, ocImage: look.url,
+      onSaved: (method) => { void actions.noteSheetSaved(method); },
+      onClosed: () => showCard(),
+    });
+  }
 
   /** 畫圖計時（T17）：計時畫面開著的時候，畫圖時間到了由它來結束 */
   let drawOpen = false;

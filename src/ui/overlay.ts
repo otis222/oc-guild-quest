@@ -19,7 +19,8 @@ export function openLayer(root: HTMLElement, opts: { onClose?: () => void; focus
     removeEventListener('keydown', onKey);
     if (closeCurrent === close) closeCurrent = null;
     opts.onClose?.();
-    if (returnFocus?.isConnected) returnFocus.focus({ preventScroll: true });
+    // onClose 打開了下一個圖層（例：關掉放大的照片回到作品集）：焦點留在新的圖層，不要跳回後面的按鈕
+    if (!closeCurrent && returnFocus?.isConnected) returnFocus.focus({ preventScroll: true });
   }
   addEventListener('keydown', onKey);
   document.body.append(root);

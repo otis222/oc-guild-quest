@@ -73,7 +73,8 @@ export type EventType =
   | 'oc_changed'               // T5 加的：在設定卡換造型（7.2 沒有）
   | 'course_created'           // 接委託時新增自訂課程（7.2 沒有）
   | 'bonus_started'            // T9 加的：開始一局加分關（設定圖急救）（7.2 沒有）
-  | 'bonus_finished';          // T9 加的：加分關按「完成排版」計分（7.2 沒有）
+  | 'bonus_finished'           // T9 加的：加分關按「完成排版」計分（7.2 沒有）
+  | 'gallery_opened';          // T15 加的：打開公會作品集（7.2 沒有）
 
 export interface LogEvent {
   t: number;

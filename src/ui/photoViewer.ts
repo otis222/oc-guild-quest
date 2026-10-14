@@ -1,5 +1,5 @@
-// 放大看照片：大廳的展品、設定卡上交件的成果。
-import { el } from './dom';
+// 放大看照片：大廳的展品、設定卡上交件的成果、作品集。
+import { el, on } from './dom';
 import { openDialog } from './overlay';
 
 export interface PhotoViewerOptions {
@@ -9,6 +9,8 @@ export interface PhotoViewerOptions {
   caption?: string;
   /** 圖片的替代文字 */
   alt: string;
+  /** 照片下面多一顆按鈕（例：大廳展品的「看全部作品」） */
+  action?: { label: string; onClick(): void };
   onClose?(): void;
 }
 
@@ -18,5 +20,6 @@ export function openPhotoViewer(o: PhotoViewerOptions): void {
     el('figure', { class: 'viewer' },
       el('img', { src: o.url, alt: o.alt, draggable: 'false' }),
       o.caption ? el('figcaption', {}, o.caption) : null),
+    ...(o.action ? [on(el('button', { type: 'button', class: 'viewer-action' }, o.action.label), 'click', o.action.onClick)] : []),
   );
 }

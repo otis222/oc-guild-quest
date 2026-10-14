@@ -174,6 +174,12 @@ describe('加分關（設定圖急救）', () => {
     expect((await loadEvents(kv)).at(-1)?.data).toMatchObject({ score: 50, best: 85 });
   });
 
+  it('打開作品集記 gallery_opened，帶著從哪裡打開、有幾件', async () => {
+    const { actions, kv } = await setup();
+    await actions.noteGalleryOpened('card', 3);
+    expect((await loadEvents(kv)).at(-1)).toMatchObject({ type: 'gallery_opened', data: { via: 'card', count: 3 } });
+  });
+
   it('改台詞：存進 OC，不記事件；一樣的不算有變', async () => {
     const { actions, store, kv, types } = await setup();
     expect(await actions.setOcQuote('今天也要畫圖')).toBe(true);

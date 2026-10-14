@@ -61,6 +61,8 @@ export interface Actions {
   finishBonus(commissionId: string, result: BonusResult): Promise<number>;
   /** 改 OC 的台詞（設定圖上的台詞卡）；回傳有沒有變 */
   setOcQuote(quote: string): Promise<boolean>;
+  /** 打開公會作品集（T15）：via 是從哪裡打開的（card：設定卡、exhibit：大廳展品），count 是有幾件作品 */
+  noteGalleryOpened(via: string, count: number): Promise<void>;
 }
 
 type LevelOp = (s: GuildState, commissionId: string, levelId: string, now: number) => GuildState;
@@ -191,6 +193,10 @@ export function createActions(kv: KV, store: GuildStore, clock: () => number = D
     async setOcQuote(quote) {
       const { before, after } = await apply((s) => setOcQuote(s, quote));
       return before !== after;
+    },
+
+    async noteGalleryOpened(via, count) {
+      await log('gallery_opened', { data: { via, count } }, clock());
     },
   };
 }

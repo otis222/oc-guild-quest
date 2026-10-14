@@ -80,6 +80,12 @@ describe('委託與任務的操作', () => {
     expect((await types()).filter((t) => t === 'level_completed')).toHaveLength(1);
   });
 
+  it('從小提示的「下一個任務」開始：level_started 記下 via', async () => {
+    const { actions, cId, levelIds, kv } = await setup();
+    await actions.startLevel(cId, levelIds[0], 'toast');
+    expect((await loadEvents(kv)).at(-1)).toMatchObject({ type: 'level_started', data: { minutes: 10, via: 'toast' } });
+  });
+
   it('時間到之後按再 5 分鐘：記 level_extended，標記是時間到之後', async () => {
     const { actions, cId, levelIds, clock, kv } = await setup();
     await actions.startLevel(cId, levelIds[0]);
@@ -143,29 +149,57 @@ describe('委託與任務的操作', () => {
   });
 });
 
-describe('加分關（設定圖急救）', () => {
-  const result = (score: number) => ({ score, passed: ['feet', 'text'], ms: 42_000, moves: 9 });
+describe('作品集', () => {
+  it('打開作品集記 gallery_opened，帶著從哪裡打開、有幾件', async () => {
+    const { actions, kv } = await setup();
+    await actions.noteGalleryOpened('card', 3);
+    expect((await loadEvents(kv)).at(-1)).toMatchObject({ type: 'gallery_opened', data: { via: 'card', count: 3 } });
+  });
+});
 
-  it('開始記 bonus_started；計分記 bonus_finished，存下最高分', async () => {
+describe('加分關', () => {
+  const result = (score: number) => ({ score, passed: ['read', 'quiet'], ms: 42_000, moves: 9 });
+
+  it('開始記 bonus_started；計分記 bonus_finished，存下最高分；事件看得出是哪一種加分關', async () => {
     const { actions, cId, store, kv, clock } = await setup();
-    await actions.startBonus(cId);
-    expect(await actions.finishBonus(cId, result(65))).toBe(65);
+    await actions.startBonus(cId, 'palette');
+    expect(await actions.finishBonus(cId, 'palette', result(65))).toBe(65);
     expect(store.state.commissions[0].bonusBest).toBe(65);
     expect((await loadState(kv))!.commissions[0].bonusBest).toBe(65);
     const events = (await loadEvents(kv)).slice(-2);
-    expect(events[0]).toEqual({ t: clock.now, type: 'bonus_started', commissionId: cId });
+    expect(events[0]).toEqual({ t: clock.now, type: 'bonus_started', commissionId: cId, data: { game: 'palette' } });
     expect(events[1]).toEqual({
       t: clock.now, type: 'bonus_finished', commissionId: cId,
-      data: { score: 65, best: 65, passed: ['feet', 'text'], ms: 42_000, moves: 9 },
+      data: { game: 'palette', score: 65, best: 65, passed: ['read', 'quiet'], ms: 42_000, moves: 9 },
     });
+  });
+
+  it('設定圖急救帶著排法：記成 OC 設定圖成品的排法；配色急救不會記', async () => {
+    const { actions, cId, store } = await setup();
+    const positions = {
+      name: { x: 0, y: 0 }, quote: { x: 0, y: 1 }, front: { x: 0, y: 3 }, side: { x: 3, y: 3 }, back: { x: 6, y: 3 },
+    };
+    await actions.finishBonus(cId, 'palette', { ...result(100), positions });
+    expect(store.state.oc.sheetBest).toBeUndefined();
+    await actions.finishBonus(cId, 'sheet', { ...result(80), positions });
+    expect(store.state.oc.sheetBest).toMatchObject({ positions, score: 80 });
+  });
+
+  it('看設定圖、存設定圖都記事件', async () => {
+    const { actions, kv } = await setup();
+    await actions.noteSheetOpened();
+    await actions.noteSheetSaved('share');
+    const events = (await loadEvents(kv)).slice(-2);
+    expect(events[0]).toMatchObject({ type: 'sheet_opened', data: { parts: [], fromGame: false } });
+    expect(events[1]).toMatchObject({ type: 'sheet_saved', data: { method: 'share' } });
   });
 
   it('第二次比較低：最高分不變，事件照記這次的分數', async () => {
     const { actions, cId, store, kv } = await setup();
-    await actions.finishBonus(cId, result(85));
-    expect(await actions.finishBonus(cId, result(50))).toBe(85);
+    await actions.finishBonus(cId, 'sheet', result(85));
+    expect(await actions.finishBonus(cId, 'sheet', result(50))).toBe(85);
     expect(store.state.commissions[0].bonusBest).toBe(85);
-    expect((await loadEvents(kv)).at(-1)?.data).toMatchObject({ score: 50, best: 85 });
+    expect((await loadEvents(kv)).at(-1)?.data).toMatchObject({ game: 'sheet', score: 50, best: 85 });
   });
 
   it('改台詞：存進 OC，不記事件；一樣的不算有變', async () => {
@@ -231,5 +265,68 @@ describe('交件與展品', () => {
     await actions.submitCommission(cId, { photo: jpeg('a'), palette: ['#e5484d'] });
     await actions.noteExhibitOpened(0, store.state.exhibits[0]);
     expect((await loadEvents(kv)).at(-1)).toMatchObject({ type: 'exhibit_opened', commissionId: cId, data: { slot: 0 } });
+  });
+});
+
+describe('畫圖時間', () => {
+  /** 完成前 n 個任務（每個存 5 分鐘畫圖時間） */
+  async function finish(n: number) {
+    const ctx = await setup();
+    for (const l of ctx.levelIds.slice(0, n)) {
+      await ctx.actions.startLevel(ctx.cId, l);
+      await ctx.actions.completeLevel(ctx.cId, l);
+    }
+    return ctx;
+  }
+
+  it('沒有存時間：開始不了，不記事件', async () => {
+    const { actions, types } = await setup();
+    expect(await actions.startDrawing()).toBe(false);
+    expect(await types()).toEqual(['commission_created']);
+  });
+
+  it('開始記 draw_started（帶著拿出來多少）；提早結束記 draw_finished，沒用完的留著', async () => {
+    const { actions, store, kv, clock } = await finish(2);
+    expect(await actions.startDrawing()).toBe(true);
+    expect((await loadEvents(kv)).at(-1)).toMatchObject({ type: 'draw_started', data: { bankMs: 10 * MIN } });
+    clock.now += 2 * MIN;
+    expect(await actions.pauseDrawing()).toBe(true);
+    clock.now += 5 * MIN;
+    expect(await actions.resumeDrawing()).toBe(true);
+    clock.now += 1 * MIN;
+    expect(await actions.finishDrawing('early')).toBe(true);
+    expect((await loadEvents(kv)).at(-1)).toMatchObject({
+      type: 'draw_finished', data: { reason: 'early', usedMs: 3 * MIN, plannedMs: 10 * MIN, pauses: 1 },
+    });
+    expect(store.state.drawing).toBeUndefined();
+    expect((await loadState(kv))!.drawUsedMs).toBe(3 * MIN);
+    expect(await actions.finishDrawing('early')).toBe(false);
+  });
+
+  it('開始畫圖時正在跑的任務先暫停（記成自動暫停）；開始任務時結束畫圖', async () => {
+    const { actions, cId, levelIds, store, kv, clock } = await finish(1);
+    await actions.startLevel(cId, levelIds[1]);
+    clock.now += MIN;
+    await actions.startDrawing();
+    let events = await loadEvents(kv);
+    expect(events.slice(-2).map((e) => e.type)).toEqual(['level_paused', 'draw_started']);
+    expect(events.at(-2)).toMatchObject({ levelId: levelIds[1], data: { auto: true } });
+    clock.now += 2 * MIN;
+    await actions.resumeLevel(cId, levelIds[1]);
+    events = await loadEvents(kv);
+    expect(events.slice(-2).map((e) => e.type)).toEqual(['level_resumed', 'draw_finished']);
+    expect(events.at(-1)?.data).toMatchObject({ reason: 'task', usedMs: 2 * MIN });
+    expect(store.state.drawing).toBeUndefined();
+  });
+
+  it('時間到還沒結束：settleDrawing 幫它結束，只扣拿出來的那些', async () => {
+    const { actions, store, kv, clock } = await finish(1);
+    await actions.startDrawing();
+    clock.now += 4 * MIN;
+    expect(await actions.settleDrawing()).toBe(false);
+    clock.now += 60 * MIN;
+    expect(await actions.settleDrawing()).toBe(true);
+    expect((await loadEvents(kv)).at(-1)).toMatchObject({ type: 'draw_finished', data: { reason: 'timeUp', usedMs: 5 * MIN } });
+    expect(store.state.drawUsedMs).toBe(5 * MIN);
   });
 });

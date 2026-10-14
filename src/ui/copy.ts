@@ -2,6 +2,12 @@
 // 要改用詞，改這個檔就好。
 // 課程名稱、部位名稱（名牌、配色…）和預設任務名稱在 src/core/templates.ts。
 
+/** 畫圖時間有多少：整分鐘寫「15 分鐘」，有零頭寫「12 分 30 秒」（秒數無條件捨去） */
+const drawAmount = (ms: number): string => {
+  const total = Math.floor(Math.max(0, ms) / 1000), m = Math.floor(total / 60), s = total % 60;
+  return s ? `${m} 分 ${s} 秒` : `${m} 分鐘`;
+};
+
 export const COPY = {
   hud: {
     hello: '跟夥伴打招呼',
@@ -122,6 +128,9 @@ export const COPY = {
     submittedDetail: (work: string, level: number) => `公會等級 ${level}・${work}`,
     /** 企劃表 7.7 的按鈕範例 */
     open: '看 OC 設定卡',
+    /** 完成任務後直接接下一關（T10） */
+    nextTask: (minutes: number) => `下一個任務（${minutes} 分鐘）`,
+    nextSubmit: '交件',
   },
 
   /** 交件 */
@@ -146,6 +155,21 @@ export const COPY = {
     saveFailed: '交件沒成功，再按一次。',
   },
 
+  /** 公會作品集（T15） */
+  gallery: {
+    /** 設定卡上的按鈕 */
+    open: (n: number) => `作品集（${n}）`,
+    title: (n: number) => `公會作品集（${n}）`,
+    empty: '還沒有作品。交件後，作業照片會放在這裡。',
+    date: (md: string) => `${md} 交件`,
+    onExhibit: '展台上',
+    missing: '讀不到照片',
+    itemAria: (course: string, work: string, md: string, onExhibit: boolean) =>
+      `${course}・${work}，${md} 交件${onExhibit ? '，在大廳展台上' : ''}`,
+    /** 放大看大廳展品時的按鈕 */
+    all: '看全部作品',
+  },
+
   /** 放大看照片 */
   viewer: {
     exhibit: '公會展品',
@@ -153,9 +177,9 @@ export const COPY = {
     caption: (course: string, work: string, md: string) => `${course}・${work}　${md} 交件`,
   },
 
-  /** 平面構成的加分關：設定圖急救（企劃表 T9） */
+  /** 加分關（T9 設定圖急救是平面構成的；下面的分數、結果、按鈕三種加分關共用） */
   bonus: {
-    /** 委託卡上的按鈕（部位是版面的委託，計時任務都完成以後才有） */
+    /** 委託卡上的按鈕（部位是版面、配色、名牌的委託，計時任務都完成以後才有） */
     button: (best?: number) => (best === undefined ? '加分關' : `加分關 ${best} 分`),
     title: '設定圖急救',
     hint: '設定圖亂掉了。把小卡拖進格線排好。',
@@ -197,6 +221,106 @@ export const COPY = {
     saveFailed: '分數沒記到，再按一次。',
   },
 
+  /** OC 設定圖成品（企劃表 T18） */
+  charSheet: {
+    /** 設定卡上的按鈕 */
+    open: '看設定圖',
+    title: 'OC 設定圖',
+    drawing: '正在畫設定圖…',
+    failed: '設定圖沒畫出來。關掉再開一次試試。',
+    alt: (name: string) => `${name}的 OC 設定圖：名字、台詞、三視圖、配色、版面、草稿`,
+    save: '存成圖片',
+    note: '圖片在這台裝置上做好，不會上傳。',
+    shared: '分享好了。',
+    downloaded: '圖片下載好了。',
+    saveFailed: '沒存成功，再按一次。',
+    // 下面是畫在設定圖上的字
+    heading: 'OC 設定圖',
+    level: (n: number) => `公會等級 ${n}`,
+    quoteEmpty: '（還沒有台詞）',
+    missing: (course: string) => `交${course}作業後出現`,
+    footer: (date: string) => `公會委託單・${date}`,
+  },
+
+  /** 作業換畫圖時間（企劃表 T17）：完成一個任務存 5 分鐘 */
+  draw: {
+    title: '畫圖時間',
+    heading: '畫自己想畫的',
+    bank: (ms: number) => `存了 ${drawAmount(ms)}`,
+    planned: (ms: number) => `這次可以畫 ${drawAmount(ms)}`,
+    none: '完成一個任務，存 5 分鐘。',
+    drawingNow: '畫圖中',
+    start: '開始畫圖',
+    back: '回到畫圖',
+    pause: '休息一下',
+    resume: '繼續畫圖',
+    finishEarly: '提早結束',
+    paused: '休息中',
+    timeUp: '時間到',
+    timeUpNote: '畫圖時間用完了。完成任務可以再存。',
+    done: '回大廳',
+    failed: '沒記到，再按一次。',
+    /** 完成任務後的小提示 */
+    earned: (min: number, bankMs: number) => `畫圖時間 +${min} 分鐘・存了 ${drawAmount(bankMs)}`,
+    /** 開始畫圖時主角說的話 */
+    speech: '來畫圖吧',
+  },
+
+  /** 色彩學的加分關：配色急救（企劃表 T16） */
+  paletteGame: {
+    title: '配色急救',
+    hint: '設定圖的顏色亂掉了。幫每個地方選一個顏色。',
+    previewAria: '配色預覽：OC 設定圖',
+    /** 小設定圖上還沒寫台詞時的那一行 */
+    sample: 'OC 設定圖',
+    roles: { bg: '背景', text: '文字', main: '主色', accent: '強調色' },
+    roleAria: (role: string) => `${role}的顏色`,
+    ocColor: (i: number) => `OC 的顏色 ${i}`,
+    neutrals: ['白', '灰', '黑'],
+    ocNote: '前面幾色是從 OC 圖上抽出來的，後面是白、灰、黑。',
+    groups: { value: '明度對比', color: '色彩搭配' },
+    rules: {
+      read: '文字看得清楚',
+      figure: '主色從背景跳出來',
+      mark: '強調色從背景跳出來',
+      quiet: '背景不搶戲',
+      own: '主色強調色來自 OC',
+      pop: '強調色比主色鮮豔',
+    },
+    note: '文字和背景的明度對比要 4.5 以上，主色、強調色和背景 3 以上。背景用白、灰、黑或很淡的顏色。',
+    finish: '完成配色',
+    again: '再配一次',
+    result: {
+      perfect: '配色救回來了。看得清楚，也有重點。',
+      good: '差一點就滿分。看看還沒打勾的那幾項。',
+      retry: '顏色還在打架。照沒打勾的再配一次。',
+    },
+  },
+
+  /** 字體設計的加分關：名牌急救（企劃表 T16） */
+  plateGame: {
+    title: '名牌急救',
+    hint: '名牌上的字亂掉了。把每個字拖整齊。',
+    keysHint: '選一個字，用方向鍵一次移一小格。',
+    plateAria: 'OC 的名牌',
+    glyph: (ch: string, i: number, n: number) => `第 ${i}/${n} 個字「${ch}」`,
+    groups: { line: '對齊', space: '字距' },
+    rules: {
+      baseline: '對齊基線',
+      center: '名字在正中間',
+      even: '字距平均',
+      comfy: '字距不擠也不鬆',
+    },
+    note: '一小格是四分之一個字。字距一到三小格剛好。',
+    finish: '完成名牌',
+    again: '再排一次',
+    result: {
+      perfect: '名牌救回來了。字排得很整齊。',
+      good: '差一點就滿分。看看還沒打勾的那幾項。',
+      retry: '字還沒站好。照沒打勾的再排一次。',
+    },
+  },
+
   /** 換造型 */
   look: {
     title: '換造型',
@@ -212,6 +336,8 @@ export const COPY = {
     taskDone: '任務完成！',
     /** 企劃表 7.7 的台詞範例 */
     submitted: '交件了！',
+    /** 交件後公會成員圍觀新展品時說的話（T14），每人挑一句 */
+    admire: ['好看', '新的展品耶', '交件辛苦了', '這是什麼作業？', '我也要加油'],
   },
 
   dialog: {

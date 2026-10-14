@@ -9,6 +9,8 @@ const tmpV = new THREE.Vector3();
 const ndc = new THREE.Vector2();
 const ray = new THREE.Raycaster();
 const floorPlane = new THREE.Plane(new THREE.Vector3(0, 1, 0), 0);
+/** peek 時鏡頭對準離廣場中心多遠的地方：展台（9.6）和圍觀的人（約 7）中間 */
+const PEEK_R = 8;
 
 export class CameraRig {
   readonly camera: THREE.PerspectiveCamera;
@@ -17,6 +19,10 @@ export class CameraRig {
   yawT = 0; pitchT = 0.52; distT = 19;
   minD = 13; maxD = 28;
   private framed = false;
+  /** 暫時看別的地方（peek）：鏡頭對準哪裡、還剩幾秒、看完要轉回去的角度 */
+  private peekTarget = new THREE.Vector3();
+  private peekLeft = 0;
+  private peekYawBack = 0;
   private readonly vp: Viewport;
 
   constructor(vp: Viewport) {
@@ -34,10 +40,29 @@ export class CameraRig {
     this.camera.aspect = this.vp.w() / this.vp.h(); this.camera.updateProjectionMatrix();
   }
 
+  /**
+   * 鏡頭暫時對準廣場邊上的 at（T14：交件後看新展品），從廣場中間正面看過去；seconds 秒後轉回原本的角度。
+   * 側邊的展台要轉比較多，最多轉 1 弧度，免得看到大廳外面。
+   */
+  peek(at: THREE.Vector3, seconds: number): void {
+    if (this.peekLeft <= 0) this.peekYawBack = this.yawT;
+    const a = Math.atan2(at.z, at.x);
+    this.peekTarget.set(Math.cos(a) * PEEK_R, 0, Math.sin(a) * PEEK_R);
+    this.yawT = Math.max(-1, Math.min(1, Math.atan2(-Math.cos(a), -Math.sin(a))));
+    this.peekLeft = seconds;
+  }
+
   update(dt: number, t: number, focus: THREE.Vector3): void {
     const follow = this.vp.w() / this.vp.h() < 0.9 ? 0.75 : 0.3;
-    this.tx = damp(this.tx, focus.x * follow, 2.5, dt);
-    this.tz = damp(this.tz, 0.6 + focus.z * follow * 0.6, 2.5, dt);
+    if (this.peekLeft > 0) {
+      this.peekLeft -= dt;
+      if (this.peekLeft <= 0) this.yawT = this.peekYawBack;
+      this.tx = damp(this.tx, this.peekTarget.x, 2.5, dt);
+      this.tz = damp(this.tz, this.peekTarget.z, 2.5, dt);
+    } else {
+      this.tx = damp(this.tx, focus.x * follow, 2.5, dt);
+      this.tz = damp(this.tz, 0.6 + focus.z * follow * 0.6, 2.5, dt);
+    }
     this.yaw = damp(this.yaw, this.yawT + Math.sin(t * 0.17) * 0.035, 3, dt);
     this.pitch = damp(this.pitch, this.pitchT, 3, dt);
     this.dist = damp(this.dist, this.distT, 2.2, dt);

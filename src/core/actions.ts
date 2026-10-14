@@ -1,7 +1,9 @@
 // 玩家的操作：改狀態 → 存檔 → 記事件（企劃表 7.6）。
 // 事件只在狀態真的有變時才記：連按兩次「完成」、或兩個分頁都按，也只記一次、只點亮一片。
-import { recordBonus, setOcQuote } from './bonus';
+import { recordBonus, setOcQuote, type BonusGame } from './bonus';
+import { charSheetData, recordSheetBest } from './charSheet';
 import { courseInfo } from './courses';
+import { drawElapsedMs, drawPhase, finishDrawing, pauseDrawing, resumeDrawing, startDrawing } from './drawTime';
 import { logEvent, type EventFields } from './events';
 import { newId } from './id';
 import {
@@ -11,7 +13,7 @@ import { deletePhoto, putPhoto, type KV } from './storage';
 import type { GuildStore } from './store';
 import { commissionOfPhoto, submitCommission } from './submit';
 import { EXTEND_MINUTES, timerPhase } from './timer';
-import type { EventType, GuildState, Level } from './types';
+import type { EventType, GuildState, Level, SheetPositions } from './types';
 
 /** 交件要存的東西（照片已經在瀏覽器裡縮好） */
 export interface SubmitInput {
@@ -23,23 +25,25 @@ export interface SubmitInput {
   nameplate?: Blob;
 }
 
-/** 加分關（設定圖急救）按「完成排版」時的結果 */
+/** 加分關按「完成」時的結果（設定圖急救、配色急救、名牌急救） */
 export interface BonusResult {
   /** 0～100 */
   score: number;
-  /** 做到的規則（sheet.ts 的 SheetRuleId） */
+  /** 做到的規則（sheet.ts、paletteGame.ts、plateGame.ts 的規則 id） */
   passed: readonly string[];
-  /** 從這一局開始到按「完成排版」花了多久 */
+  /** 從這一局開始到按「完成」花了多久 */
   ms: number;
-  /** 移動小卡幾次（拖曳、點一下放進格線、方向鍵） */
+  /** 動了幾次（設定圖：移動小卡；配色：換顏色；名牌：移動字） */
   moves: number;
+  /** 設定圖急救這次的排法：分數是目前最好的話，OC 設定圖成品照這個排（T18） */
+  positions?: SheetPositions;
 }
 
 export interface Actions {
   /** 接新委託（委託單上新加的課程一起建立），回傳委託 id */
   createCommission(draft: CommissionDraft): Promise<string>;
-  /** 下面幾個回傳「狀態有沒有變」 */
-  startLevel(commissionId: string, levelId: string): Promise<boolean>;
+  /** 下面幾個回傳「狀態有沒有變」。via：從哪裡開始的（board：委託板、toast：大廳小提示的「下一個任務」），記在事件裡 */
+  startLevel(commissionId: string, levelId: string, via?: string): Promise<boolean>;
   pauseLevel(commissionId: string, levelId: string): Promise<boolean>;
   resumeLevel(commissionId: string, levelId: string): Promise<boolean>;
   extendLevel(commissionId: string, levelId: string): Promise<boolean>;
@@ -55,13 +59,31 @@ export interface Actions {
   submitCommission(commissionId: string, input: SubmitInput): Promise<boolean>;
   /** 點大廳展台上的展品（放大看） */
   noteExhibitOpened(slot: number, photoId: string): Promise<void>;
-  /** 開始一局加分關（打開設定圖急救、或按「再排一次」） */
-  startBonus(commissionId: string): Promise<void>;
+  /** 開始一局加分關（打開、或按「再玩一次」）；game 是哪一種加分關，記在事件裡 */
+  startBonus(commissionId: string, game: BonusGame): Promise<void>;
   /** 加分關計分：記下這張委託的最高分，回傳最高分 */
-  finishBonus(commissionId: string, result: BonusResult): Promise<number>;
+  finishBonus(commissionId: string, game: BonusGame, result: BonusResult): Promise<number>;
   /** 改 OC 的台詞（設定圖上的台詞卡）；回傳有沒有變 */
   setOcQuote(quote: string): Promise<boolean>;
+  /** 打開公會作品集（T15）：via 是從哪裡打開的（card：設定卡、exhibit：大廳展品），count 是有幾件作品 */
+  noteGalleryOpened(via: string, count: number): Promise<void>;
+  /** 開始畫圖（T17）：存著的畫圖時間全部拿來倒數，正在跑的任務先暫停；回傳有沒有開始 */
+  startDrawing(): Promise<boolean>;
+  /** 畫圖休息一下、繼續畫圖；回傳有沒有變 */
+  pauseDrawing(): Promise<boolean>;
+  resumeDrawing(): Promise<boolean>;
+  /** 結束畫圖：畫了多久扣多久，沒用完的留著；reason 記在事件裡 */
+  finishDrawing(reason: DrawEndReason): Promise<boolean>;
+  /** 畫圖時間到了還沒結束的話（例如時間到的時候網頁沒開著），幫它結束 */
+  settleDrawing(): Promise<boolean>;
+  /** 打開 OC 設定圖成品（T18） */
+  noteSheetOpened(): Promise<void>;
+  /** 把 OC 設定圖存成圖片：method 是分享（手機）或下載（電腦） */
+  noteSheetSaved(method: 'share' | 'download'): Promise<void>;
 }
+
+/** 結束畫圖的原因：提早結束、時間到、開始任務（同時只算一個） */
+export type DrawEndReason = 'early' | 'timeUp' | 'task';
 
 type LevelOp = (s: GuildState, commissionId: string, levelId: string, now: number) => GuildState;
 
@@ -102,6 +124,15 @@ export function createActions(kv: KV, store: GuildStore, clock: () => number = D
 
   const ids = (commissionId: string, levelId: string): EventFields => ({ commissionId, levelId });
 
+  /** 結束畫圖並記 draw_finished；沒在畫就什麼都不做 */
+  async function endDrawing(reason: DrawEndReason, now: number): Promise<boolean> {
+    const { before, after } = await apply((s) => finishDrawing(s, now));
+    const d = before.drawing;
+    if (before === after || !d) return false;
+    await log('draw_finished', { data: { reason, usedMs: drawElapsedMs(d, now), plannedMs: d.plannedMs, pauses: d.pauses } }, now);
+    return true;
+  }
+
   return {
     async createCommission(draft) {
       const now = clock(), id = newId(now);
@@ -114,9 +145,10 @@ export function createActions(kv: KV, store: GuildStore, clock: () => number = D
       return id;
     },
 
-    startLevel: (cId, lId) => levelAction(startLevel, cId, lId, async (_old, next, now, before, after) => {
+    startLevel: (cId, lId, via) => levelAction(startLevel, cId, lId, async (_old, next, now, before, after) => {
       await logAutoPaused(before, after, lId, now);
-      await log('level_started', { ...ids(cId, lId), data: { minutes: next.minutes } }, now);
+      await log('level_started', { ...ids(cId, lId), data: { minutes: next.minutes, ...(via ? { via } : {}) } }, now);
+      if (after.drawing) await endDrawing('task', now);
     }),
 
     pauseLevel: (cId, lId) => levelAction(pauseLevel, cId, lId, async (_old, _next, now) => {
@@ -126,6 +158,7 @@ export function createActions(kv: KV, store: GuildStore, clock: () => number = D
     resumeLevel: (cId, lId) => levelAction(resumeLevel, cId, lId, async (old, _next, now, before, after) => {
       await logAutoPaused(before, after, lId, now);
       await log('level_resumed', { ...ids(cId, lId), data: { pausedForMs: Math.max(0, now - (old.pausedAt ?? now)) } }, now);
+      if (after.drawing) await endDrawing('task', now);
     }),
 
     extendLevel: (cId, lId) => levelAction(extendLevel, cId, lId, async (old, _next, now) => {
@@ -176,21 +209,68 @@ export function createActions(kv: KV, store: GuildStore, clock: () => number = D
       await log('exhibit_opened', { ...(c ? { commissionId: c.id } : {}), data: { slot, photoId } }, clock());
     },
 
-    async startBonus(cId) {
-      await log('bonus_started', { commissionId: cId }, clock());
+    async startBonus(cId, game) {
+      await log('bonus_started', { commissionId: cId, data: { game } }, clock());
     },
 
-    async finishBonus(cId, r) {
+    async finishBonus(cId, game, r) {
       const now = clock();
-      const { after } = await apply((s) => recordBonus(s, cId, r.score));
+      const { after } = await apply((s) => {
+        const next = recordBonus(s, cId, r.score);
+        return game === 'sheet' && r.positions ? recordSheetBest(next, r.positions, r.score, now) : next;
+      });
       const best = findCommission(after, cId).bonusBest ?? r.score;
-      await log('bonus_finished', { commissionId: cId, data: { score: r.score, best, passed: [...r.passed], ms: r.ms, moves: r.moves } }, now);
+      await log('bonus_finished', {
+        commissionId: cId, data: { game, score: r.score, best, passed: [...r.passed], ms: r.ms, moves: r.moves },
+      }, now);
       return best;
     },
 
     async setOcQuote(quote) {
       const { before, after } = await apply((s) => setOcQuote(s, quote));
       return before !== after;
+    },
+
+    async noteGalleryOpened(via, count) {
+      await log('gallery_opened', { data: { via, count } }, clock());
+    },
+
+    async startDrawing() {
+      const now = clock();
+      const { before, after } = await apply((s) => startDrawing(s, now));
+      if (before === after || !after.drawing) return false;
+      await logAutoPaused(before, after, '', now);
+      await log('draw_started', { data: { bankMs: after.drawing.plannedMs } }, now);
+      return true;
+    },
+
+    async pauseDrawing() {
+      const now = clock();
+      const { before, after } = await apply((s) => pauseDrawing(s, now));
+      return before !== after;
+    },
+
+    async resumeDrawing() {
+      const now = clock();
+      const { before, after } = await apply((s) => resumeDrawing(s, now));
+      return before !== after;
+    },
+
+    finishDrawing: (reason) => endDrawing(reason, clock()),
+
+    async settleDrawing() {
+      const now = clock(), d = store.state.drawing;
+      if (!d || drawPhase(d, now) !== 'timeUp') return false;
+      return endDrawing('timeUp', now);
+    },
+
+    async noteSheetOpened() {
+      const s = store.state;
+      await log('sheet_opened', { data: { parts: charSheetData(s).parts, fromGame: !!s.oc.sheetBest } }, clock());
+    },
+
+    async noteSheetSaved(method) {
+      await log('sheet_saved', { data: { method } }, clock());
     },
   };
 }

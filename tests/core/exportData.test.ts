@@ -47,7 +47,7 @@ describe('CSV 匯出（一列一個事件）', () => {
   it('每種事件都有中文名稱', () => {
     const all: EventType[] = ['app_opened', 'oc_created', 'commission_created', 'level_started', 'level_paused', 'level_resumed',
       'level_extended', 'level_completed', 'photo_added', 'commission_submitted', 'oc_card_opened', 'exhibit_opened', 'oc_changed', 'course_created',
-      'bonus_started', 'bonus_finished'];
+      'bonus_started', 'bonus_finished', 'gallery_opened', 'draw_started', 'draw_finished', 'sheet_opened', 'sheet_saved'];
     expect(all.every((t) => EVENT_LABELS[t].length > 0)).toBe(true);
   });
 

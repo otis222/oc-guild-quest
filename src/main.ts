@@ -3,21 +3,26 @@
 import './style.css';
 import * as THREE from 'three';
 import type { Texture } from 'pixi.js';
-import { createActions } from './core/actions';
+import { createActions, type BonusResult } from './core/actions';
+import { bonusGame } from './core/bonus';
 import { courseInfo } from './core/courses';
 import { logEvent } from './core/events';
 import type { SpriteManifest } from './core/manifest';
 import { cellOf, monthDay } from './core/ocCard';
 import { pickGuildMembers, reassignMembers, uploadedPhotoId, uploadSpriteRef } from './core/oc';
-import { createGuildState, currentWork, findCommission, findLevel, loadState, saveState } from './core/state';
+import { createGuildState, currentWork, findCommission, findLevel, loadState, nextLevel, saveState } from './core/state';
+import { DRAW_PER_TASK_MIN, drawBankMs, drawPhase } from './core/drawTime';
 import { createFpsGuard } from './core/fpsGuard';
+import { galleryWorks } from './core/gallery';
 import { isResearchMode } from './core/research';
 import { deletePhoto, getPhoto, idbKV, putPhoto, requestPersistence, type KV } from './core/storage';
 import { createGuildStore, type GuildStore } from './core/store';
 import { commissionOfPhoto } from './core/submit';
 import { elapsedMs, plannedMs, timerPhase } from './core/timer';
+import { boardPapers, duskChange, needsDusk } from './core/urgency';
+import { dueCountdown } from './core/due';
 import type { Commission, GuildState, OCProfile } from './core/types';
-import { createBoard } from './scene/board';
+import { createBoard, type Board } from './scene/board';
 import { CameraRig } from './scene/camera';
 import type { Chibi, ChibiWorld } from './scene/chibi';
 import { createExhibits, type Exhibits } from './scene/exhibits';
@@ -32,11 +37,16 @@ import { openBoard } from './ui/board';
 import { openChangeLook } from './ui/changeLook';
 import { COPY } from './ui/copy';
 import { showCreateOcCard, type SpriteChoice } from './ui/createOC';
-import { createHud, showLoadingMessage } from './ui/hud';
+import { openCharSheet } from './ui/charSheet';
+import { openDrawTimer } from './ui/drawTimer';
+import { openGallery } from './ui/gallery';
+import { createHud, showLoadingMessage, type Hud } from './ui/hud';
 import { openOcCard, type OcCardOptions } from './ui/ocCard';
-import { openPhotoViewer } from './ui/photoViewer';
+import { openPaletteGame } from './ui/paletteGame';
+import { openPhotoViewer, type PhotoViewerOptions } from './ui/photoViewer';
 import { createPhotoUrls } from './ui/photos';
-import { pieResult } from './ui/pie';
+import { courseColor, pieResult } from './ui/pie';
+import { openPlateGame } from './ui/plateGame';
 import { openSheetGame } from './ui/sheetGame';
 import { openSubmit } from './ui/submit';
 import { openTimer } from './ui/timer';
@@ -92,9 +102,9 @@ async function main(): Promise<void> {
   const input = new Input(vp, rig, (x, y) => {
     const hit = lobby.pickAt(x, y);
     if (hit) {
-      // 做任務中點主角：回到計時畫面
+      // 做任務中點主角：回到計時畫面；平常點主角，有台詞就說自己的台詞（T11）
       if (guild && hit === lobby.player && lobby.working) guild.openCurrentTask();
-      else lobby.poke(hit);
+      else lobby.poke(hit, hit === lobby.player ? guild?.playerLine() : undefined);
       return;
     }
     if (guild && rig.hits(x, y, board.targets)) { guild.openBoard(); return; }
@@ -128,6 +138,7 @@ async function main(): Promise<void> {
 
     plaza.update(dt, t, player ? player.pos : null);
     exhibits.update(t);
+    board.update(t);
     rig.update(dt, t, player ? player.pos : ORIGIN);
     lobby.update(dt, t, input.keyDir);
 
@@ -156,7 +167,7 @@ async function main(): Promise<void> {
   hud.hideLoading();
   if (isNew) player.hop();
 
-  guild = startGuild({ kv, manifest, store: createGuildStore(kv, state), lobby, player, look, plaza, exhibits });
+  guild = startGuild({ kv, manifest, store: createGuildStore(kv, state), lobby, player, look, plaza, exhibits, hud, board, rig });
   hud.onBoard(guild.openBoard);
   hud.onCard(guild.openCard);
   guild.syncWork(true);
@@ -173,6 +184,8 @@ interface Guild {
   openCard(): void;
   /** 打開正在做的任務的計時畫面 */
   openCurrentTask(): void;
+  /** 點主角時說的話：OC 的台詞（在設定圖急救寫的）；沒寫過是 undefined */
+  playerLine(): string | undefined;
   /** 點大廳第 slot 座展台的展品：放大看 */
   openExhibit(slot: number): void;
   /** 每幀：主角要不要站在委託板前、頭上的進度環。instant：直接站過去（剛載入時） */
@@ -196,10 +209,20 @@ interface GuildDeps {
   look: Look;
   plaza: Plaza;
   exhibits: Exhibits;
+  hud: Hud;
+  board: Board;
+  rig: CameraRig;
 }
 
-/** 存檔準備好之後：委託板、任務計時、OC 設定卡、換造型、交件、加分關、展品、主角做任務的樣子 */
-function startGuild({ kv, manifest, store, lobby, player, look: initialLook, plaza, exhibits }: GuildDeps): Guild {
+/** 交件後（T14）：公會成員圍觀新展品多久、鏡頭轉過去看多久（秒） */
+const GATHER_SECONDS = 12;
+const PEEK_SECONDS = 6;
+
+/** 跟著截止時間變的大廳（T12 天色、T13 委託板上的紙）多久重新檢查一次：頁面開著跨過門檻那一刻也會變 */
+const AMBIENT_CHECK_MS = 60_000;
+
+/** 存檔準備好之後：委託板、任務計時、OC 設定卡、換造型、交件、加分關、展品、主角做任務的樣子、截止前的天色 */
+function startGuild({ kv, manifest, store, lobby, player, look: initialLook, plaza, exhibits, hud, board, rig }: GuildDeps): Guild {
   const actions = createActions(kv, store);
   const wakeLock = createWakeLock();
   const photos = createPhotoUrls(kv);
@@ -210,6 +233,32 @@ function startGuild({ kv, manifest, store, lobby, player, look: initialLook, pla
   store.subscribe(syncShowcase);
   syncShowcase(store.state);
 
+  // 有委託剩不到 24 小時就變黃昏（T12）。只在「變急／不急了」那一刻切換，手動切的天色在下次改變之前不會被蓋掉
+  let urgent: boolean | null = null;
+  const syncDusk = (): void => {
+    const next = needsDusk(store.state, Date.now());
+    const change = duskChange(urgent, next);
+    urgent = next;
+    if (!change) return;
+    plaza.setTime(change === 'day');
+    hud.showTime(change === 'day');
+  };
+  // 3D 委託板上釘著進行中的委託（T13）：快截止的變粉紅、逾期的變紅
+  const syncPapers = (): void => {
+    const s = store.state, now = Date.now();
+    board.setPapers(boardPapers(s, now).map((p) => ({
+      key: p.commissionId, title: p.title, color: courseColor(courseInfo(s, p.course)), due: dueCountdown(p.dueAt, now), urgency: p.urgency,
+    })));
+  };
+  const syncAmbient = (): void => { syncDusk(); syncPapers(); };
+  store.subscribe(syncAmbient);
+  setInterval(() => {
+    syncAmbient();
+    // 畫圖時間到的時候計時畫面沒開著：在這裡結束（開著的話計時畫面自己會結束）
+    if (!drawOpen) actions.settleDrawing().catch(warn('畫圖時間沒結束成功'));
+  }, AMBIENT_CHECK_MS);
+  syncAmbient();
+
   const showCard = (opts: OcCardOptions = {}): void => openOcCard({
     store, photos,
     ocImage: () => look.url,
@@ -218,21 +267,57 @@ function startGuild({ kv, manifest, store, lobby, player, look: initialLook, pla
       save: changeLook,
       onClosed: () => showCard(),
     }),
-    // 從設定卡放大看作業，關掉後回到設定卡
-    onViewWork: (c) => viewWork(c, COPY.viewer.work, () => showCard()),
+    // 從設定卡放大看作業、打開作品集，關掉後都回到設定卡
+    onViewWork: (c) => viewWork(c, COPY.viewer.work, { onClose: () => showCard() }),
+    onOpenGallery: () => showGallery('card'),
+    onStartDrawing: () => { startDrawing().catch(warn('開始畫圖失敗')); },
+    onOpenDrawing: () => showDraw(),
+    onOpenSheet: () => showCharSheet(),
   }, opts);
 
+  /** OC 設定圖成品（T18）：從設定卡打開，關掉回到設定卡 */
+  function showCharSheet(): void {
+    void actions.noteSheetOpened();
+    openCharSheet({
+      store, photos, ocImage: look.url,
+      onSaved: (method) => { void actions.noteSheetSaved(method); },
+      onClosed: () => showCard(),
+    });
+  }
+
+  /** 畫圖計時（T17）：計時畫面開著的時候，畫圖時間到了由它來結束 */
+  let drawOpen = false;
+  function showDraw(): void {
+    drawOpen = true;
+    openDrawTimer({ store, actions, wakeLock, onClosed: () => { drawOpen = false; } });
+  }
+
+  /** 開始畫圖：存著的畫圖時間全部拿來倒數（正在跑的任務先暫停），主角跳一下 */
+  async function startDrawing(): Promise<void> {
+    if (await actions.startDrawing()) {
+      player.hop();
+      player.say(COPY.draw.speech);
+    }
+    if (store.state.drawing) showDraw();
+  }
+
   /** 放大看一張委託交的作業照片 */
-  function viewWork(c: Commission, title: string, onClose?: () => void): void {
+  function viewWork(c: Commission, title: string, more: Pick<PhotoViewerOptions, 'action' | 'onClose'> = {}): void {
     const photoId = c.photoId;
     if (!photoId) return;
     photos.get(photoId).then((url) => {
       if (!url) return;
       openPhotoViewer({
-        url, title, alt: COPY.submit.photoAlt(c.title), onClose,
+        url, title, alt: COPY.submit.photoAlt(c.title), ...more,
         caption: COPY.viewer.caption(courseInfo(store.state, c.course).label, c.title, monthDay(c.submittedAt ?? Date.now())),
       });
     }).catch(warn('照片讀取失敗'));
+  }
+
+  /** 公會作品集（T15）：via 是從哪裡打開的（card：設定卡、exhibit：大廳展品）；從設定卡打開的，關掉回到設定卡 */
+  function showGallery(via: 'card' | 'exhibit'): void {
+    void actions.noteGalleryOpened(via, galleryWorks(store.state).length);
+    openGallery({ store, photos, onClosed: via === 'card' ? () => showCard() : undefined });
   }
 
   /** 交件畫面；交成功後主角跳一下說「交件了！」，大廳浮出小提示 */
@@ -252,6 +337,13 @@ function startGuild({ kv, manifest, store, lobby, player, look: initialLook, pla
       player.hop();
       player.say(COPY.speech.submitted);
       const s = store.state, c = findCommission(s, commissionId), course = courseInfo(s, c.course);
+      // 公會成員圍到新展品前面，鏡頭轉過去看一下（T14）
+      const slot = c.photoId ? s.exhibits.indexOf(c.photoId) : -1;
+      const at = slot >= 0 ? exhibits.pedestalPos(slot) : null;
+      if (at) {
+        lobby.gather(at, COPY.speech.admire, GATHER_SECONDS);
+        rig.peek(at, PEEK_SECONDS);
+      }
       showCardToast({
         cell: cellOf(c), course, title: COPY.toast.submitted, detail: COPY.toast.submittedDetail(c.title, s.guildLevel),
         result: pieResult(c, course.part, photos.now),
@@ -294,11 +386,13 @@ function startGuild({ kv, manifest, store, lobby, player, look: initialLook, pla
 
   const showTimer = (commissionId: string, levelId: string): void => openTimer({
     store, actions, wakeLock, commissionId, levelId,
-    // 完成一個任務：主角跳一下說話，大廳下面浮出小提示（迷你設定格點亮那一片），按了才打開 OC 設定卡
+    // 完成一個任務：主角跳一下說話，大廳下面浮出小提示（迷你設定格點亮那一片），按了才打開 OC 設定卡。
+    // 還有下一關的話，小提示上直接有「下一個任務」或「交件」（T10）
     onCompleted: (commission, level) => {
       player.hop();
       player.say(COPY.speech.taskDone);
       const course = courseInfo(store.state, commission.course), cell = cellOf(commission);
+      const next = nextLevel(commission);
       showCardToast({
         cell, course, levelId: level.id,
         title: COPY.toast.lit, detail: COPY.toast.detail(course.label, commission.title, cell.lit, cell.slices.length),
@@ -306,38 +400,61 @@ function startGuild({ kv, manifest, store, lobby, player, look: initialLook, pla
           void actions.noteOcCardOpened('toast');
           showCard({ highlight: { commissionId: commission.id, levelId: level.id } });
         },
+        next: !next ? undefined : next.kind === 'timed'
+          ? { label: COPY.toast.nextTask(next.minutes), onClick: () => startTask(commission.id, next.id, 'toast') }
+          : { label: COPY.toast.nextSubmit, onClick: () => showSubmit(commission.id) },
+        // 每完成一個任務存 5 分鐘畫圖時間（T17）
+        extra: COPY.draw.earned(DRAW_PER_TASK_MIN, drawBankMs(store.state)),
       });
     },
   });
 
-  /** 開始任務（還沒開始的話）並打開計時畫面 */
-  async function openTask(commissionId: string, levelId: string): Promise<void> {
-    if (findLevel(store.state, commissionId, levelId).level.status === 'todo') await actions.startLevel(commissionId, levelId);
+  /** 開始任務（還沒開始的話）並打開計時畫面；via 是從哪裡開始的（記在事件裡） */
+  async function openTask(commissionId: string, levelId: string, via: string): Promise<void> {
+    if (findLevel(store.state, commissionId, levelId).level.status === 'todo') await actions.startLevel(commissionId, levelId, via);
     showTimer(commissionId, levelId);
   }
+  const startTask = (commissionId: string, levelId: string, via: string): void => {
+    openTask(commissionId, levelId, via).catch((err: unknown) => console.error('開始任務失敗', err));
+  };
 
   function showBoard(): void {
     openBoard({
       store,
       createCommission: (draft) => actions.createCommission(draft),
-      openTask: (cId, lId) => { openTask(cId, lId).catch((err: unknown) => console.error('開始任務失敗', err)); },
+      openTask: (cId, lId) => startTask(cId, lId, 'board'),
       openSubmit: showSubmit,
       openBonus: showBonus,
     });
   }
 
-  /** 平面構成的加分關（設定圖急救，企劃表 T9）：從委託板打開，關掉後回到委託板 */
+  /**
+   * 加分關：從委託板打開，關掉後回到委託板。依部位分成三種：
+   * 版面→設定圖急救（T9）、配色→配色急救、名牌→名牌急救（T16）
+   */
   function showBonus(commissionId: string): void {
-    const plate = store.state.oc.nameplatePhotoId;
-    openSheetGame({
+    const s = store.state;
+    const game = bonusGame(courseInfo(s, findCommission(s, commissionId).course).part);
+    if (!game) return;
+    const common = {
       store, commissionId,
-      ocImage: look.url,
-      nameplate: plate ? photos.get(plate) : Promise.resolve(null),
-      onStart: () => { void actions.startBonus(commissionId); },
-      finish: (result) => actions.finishBonus(commissionId, result),
-      saveQuote: (quote) => { actions.setOcQuote(quote).catch(warn('台詞沒存到')); },
+      onStart: () => { void actions.startBonus(commissionId, game); },
+      finish: (result: BonusResult) => actions.finishBonus(commissionId, game, result),
       onClosed: showBoard,
-    });
+    };
+    if (game === 'palette') {
+      openPaletteGame({ ...common, ocImage: look.url }).catch(warn('配色急救打不開'));
+    } else if (game === 'nameplate') {
+      openPlateGame(common);
+    } else {
+      const plate = s.oc.nameplatePhotoId;
+      openSheetGame({
+        ...common,
+        ocImage: look.url,
+        nameplate: plate ? photos.get(plate) : Promise.resolve(null),
+        saveQuote: (quote) => { actions.setOcQuote(quote).catch(warn('台詞沒存到')); },
+      });
+    }
   }
 
   return {
@@ -347,7 +464,7 @@ function startGuild({ kv, manifest, store, lobby, player, look: initialLook, pla
       if (!photoId) return;
       void actions.noteExhibitOpened(slot, photoId);
       const c = commissionOfPhoto(store.state, photoId);
-      if (c) viewWork(c, COPY.viewer.exhibit);
+      if (c) viewWork(c, COPY.viewer.exhibit, { action: { label: COPY.gallery.all, onClick: () => showGallery('exhibit') } });
     },
     openCard() {
       void actions.noteOcCardOpened('hud');
@@ -357,6 +474,7 @@ function startGuild({ kv, manifest, store, lobby, player, look: initialLook, pla
       const work = currentWork(store.state);
       if (work) showTimer(work.commission.id, work.level.id);
     },
+    playerLine: () => store.state.oc.quote,
     syncWork(instant = false) {
       const work = currentWork(store.state);
       if (!work) { lobby.setWork(null); return; }
@@ -367,6 +485,12 @@ function startGuild({ kv, manifest, store, lobby, player, look: initialLook, pla
       }, instant);
     },
     resumeIfRunning() {
+      // 畫圖中重新整理：回到畫圖計時（時間到了的話，計時畫面寫「用完了」並結束這次畫圖）
+      const drawing = store.state.drawing;
+      if (drawing) {
+        if (drawPhase(drawing, Date.now()) !== 'paused') showDraw();
+        return;
+      }
       const work = currentWork(store.state);
       if (work && timerPhase(work.level, Date.now()) !== 'paused') showTimer(work.commission.id, work.level.id);
     },

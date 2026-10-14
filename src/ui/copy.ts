@@ -171,9 +171,9 @@ export const COPY = {
     caption: (course: string, work: string, md: string) => `${course}・${work}　${md} 交件`,
   },
 
-  /** 平面構成的加分關：設定圖急救（企劃表 T9） */
+  /** 加分關（T9 設定圖急救是平面構成的；下面的分數、結果、按鈕三種加分關共用） */
   bonus: {
-    /** 委託卡上的按鈕（部位是版面的委託，計時任務都完成以後才有） */
+    /** 委託卡上的按鈕（部位是版面、配色、名牌的委託，計時任務都完成以後才有） */
     button: (best?: number) => (best === undefined ? '加分關' : `加分關 ${best} 分`),
     title: '設定圖急救',
     hint: '設定圖亂掉了。把小卡拖進格線排好。',
@@ -213,6 +213,61 @@ export const COPY = {
     again: '再排一次',
     back: '回委託板',
     saveFailed: '分數沒記到，再按一次。',
+  },
+
+  /** 色彩學的加分關：配色急救（企劃表 T16） */
+  paletteGame: {
+    title: '配色急救',
+    hint: '設定圖的顏色亂掉了。幫每個地方選一個顏色。',
+    previewAria: '配色預覽：OC 設定圖',
+    /** 小設定圖上還沒寫台詞時的那一行 */
+    sample: 'OC 設定圖',
+    roles: { bg: '背景', text: '文字', main: '主色', accent: '強調色' },
+    roleAria: (role: string) => `${role}的顏色`,
+    ocColor: (i: number) => `OC 的顏色 ${i}`,
+    neutrals: ['白', '灰', '黑'],
+    ocNote: '前面幾色是從 OC 圖上抽出來的，後面是白、灰、黑。',
+    groups: { value: '明度對比', color: '色彩搭配' },
+    rules: {
+      read: '文字看得清楚',
+      figure: '主色從背景跳出來',
+      mark: '強調色從背景跳出來',
+      quiet: '背景不搶戲',
+      own: '主色強調色來自 OC',
+      pop: '強調色比主色鮮豔',
+    },
+    note: '文字和背景的明度對比要 4.5 以上，主色、強調色和背景 3 以上。背景用白、灰、黑或很淡的顏色。',
+    finish: '完成配色',
+    again: '再配一次',
+    result: {
+      perfect: '配色救回來了。看得清楚，也有重點。',
+      good: '差一點就滿分。看看還沒打勾的那幾項。',
+      retry: '顏色還在打架。照沒打勾的再配一次。',
+    },
+  },
+
+  /** 字體設計的加分關：名牌急救（企劃表 T16） */
+  plateGame: {
+    title: '名牌急救',
+    hint: '名牌上的字亂掉了。把每個字拖整齊。',
+    keysHint: '選一個字，用方向鍵一次移一小格。',
+    plateAria: 'OC 的名牌',
+    glyph: (ch: string, i: number, n: number) => `第 ${i}/${n} 個字「${ch}」`,
+    groups: { line: '對齊', space: '字距' },
+    rules: {
+      baseline: '對齊基線',
+      center: '名字在正中間',
+      even: '字距平均',
+      comfy: '字距不擠也不鬆',
+    },
+    note: '一小格是四分之一個字。字距一到三小格剛好。',
+    finish: '完成名牌',
+    again: '再排一次',
+    result: {
+      perfect: '名牌救回來了。字排得很整齊。',
+      good: '差一點就滿分。看看還沒打勾的那幾項。',
+      retry: '字還沒站好。照沒打勾的再排一次。',
+    },
   },
 
   /** 換造型 */

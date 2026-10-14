@@ -3,11 +3,11 @@
 // 三視圖只有一張 OC 圖：正面是原圖、側面壓窄、背面是剪影，不生新的圖。名字有名牌（字體設計交件後）就用名牌。
 // 拖曳時跟著手指走，放開就吸到最近的格子；點一下是原地放進格線；也可以用方向鍵一次移一格。
 import type { BonusResult } from '../core/actions';
-import { cleanQuote, QUOTE_MAX } from '../core/bonus';
+import { bonusGrade, cleanQuote, QUOTE_MAX } from '../core/bonus';
 import { courseInfo } from '../core/courses';
 import {
   CARD_SIZE, clampToSheet, looseCards, messyLayout, nudgeCard, scoreSheet, SHEET_CARDS, SHEET_COLS, SHEET_ROWS, SHEET_RULES,
-  sheetGrade, snapCard, type CardPos, type SheetCardId, type SheetLayout, type SheetRule, type SheetRuleId, type SheetScore,
+  snapCard, type CardPos, type SheetCardId, type SheetLayout, type SheetRule, type SheetRuleId, type SheetScore,
 } from '../core/sheet';
 import { findCommission } from '../core/state';
 import type { GuildStore } from '../core/store';
@@ -256,7 +256,7 @@ export function openSheetGame(d: SheetGameDeps): void {
 
   /** 計完分：分數、評語、最高分，下面照樣看得到哪幾項做到了。滿分時主要按鈕是回委託板，不然是再排一次 */
   function showResult(best: number): void {
-    const grade = sheetGrade(score.score);
+    const grade = bonusGrade(score.score);
     const result = el('div', { class: 'sheet-result', role: 'status', tabindex: -1 },
       el('strong', { class: 'sheet-result-score' }, B.score(score.score)),
       el('p', {}, B.result[grade]),

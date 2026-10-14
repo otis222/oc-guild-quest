@@ -3,7 +3,8 @@
 import './style.css';
 import * as THREE from 'three';
 import type { Texture } from 'pixi.js';
-import { createActions } from './core/actions';
+import { createActions, type BonusResult } from './core/actions';
+import { bonusGame } from './core/bonus';
 import { courseInfo } from './core/courses';
 import { logEvent } from './core/events';
 import type { SpriteManifest } from './core/manifest';
@@ -38,9 +39,11 @@ import { showCreateOcCard, type SpriteChoice } from './ui/createOC';
 import { openGallery } from './ui/gallery';
 import { createHud, showLoadingMessage, type Hud } from './ui/hud';
 import { openOcCard, type OcCardOptions } from './ui/ocCard';
+import { openPaletteGame } from './ui/paletteGame';
 import { openPhotoViewer, type PhotoViewerOptions } from './ui/photoViewer';
 import { createPhotoUrls } from './ui/photos';
 import { courseColor, pieResult } from './ui/pie';
+import { openPlateGame } from './ui/plateGame';
 import { openSheetGame } from './ui/sheetGame';
 import { openSubmit } from './ui/submit';
 import { openTimer } from './ui/timer';
@@ -387,18 +390,33 @@ function startGuild({ kv, manifest, store, lobby, player, look: initialLook, pla
     });
   }
 
-  /** 平面構成的加分關（設定圖急救，企劃表 T9）：從委託板打開，關掉後回到委託板 */
+  /**
+   * 加分關：從委託板打開，關掉後回到委託板。依部位分成三種：
+   * 版面→設定圖急救（T9）、配色→配色急救、名牌→名牌急救（T16）
+   */
   function showBonus(commissionId: string): void {
-    const plate = store.state.oc.nameplatePhotoId;
-    openSheetGame({
+    const s = store.state;
+    const game = bonusGame(courseInfo(s, findCommission(s, commissionId).course).part);
+    if (!game) return;
+    const common = {
       store, commissionId,
-      ocImage: look.url,
-      nameplate: plate ? photos.get(plate) : Promise.resolve(null),
-      onStart: () => { void actions.startBonus(commissionId); },
-      finish: (result) => actions.finishBonus(commissionId, result),
-      saveQuote: (quote) => { actions.setOcQuote(quote).catch(warn('台詞沒存到')); },
+      onStart: () => { void actions.startBonus(commissionId, game); },
+      finish: (result: BonusResult) => actions.finishBonus(commissionId, game, result),
       onClosed: showBoard,
-    });
+    };
+    if (game === 'palette') {
+      openPaletteGame({ ...common, ocImage: look.url }).catch(warn('配色急救打不開'));
+    } else if (game === 'nameplate') {
+      openPlateGame(common);
+    } else {
+      const plate = s.oc.nameplatePhotoId;
+      openSheetGame({
+        ...common,
+        ocImage: look.url,
+        nameplate: plate ? photos.get(plate) : Promise.resolve(null),
+        saveQuote: (quote) => { actions.setOcQuote(quote).catch(warn('台詞沒存到')); },
+      });
+    }
   }
 
   return {

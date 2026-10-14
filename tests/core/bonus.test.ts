@@ -1,5 +1,10 @@
 import { describe, expect, it } from 'vitest';
-import { bonusUnlocked, cleanQuote, QUOTE_MAX, recordBonus, setOcQuote } from '../../src/core/bonus';
+import {
+  BONUS_FULL_SCORE, bonusGame, bonusGrade, bonusUnlocked, cleanQuote, QUOTE_MAX, recordBonus, setOcQuote,
+} from '../../src/core/bonus';
+import { PALETTE_FULL_SCORE } from '../../src/core/paletteGame';
+import { PLATE_FULL_SCORE } from '../../src/core/plateGame';
+import { SHEET_FULL_SCORE } from '../../src/core/sheet';
 import { courseInfo } from '../../src/core/courses';
 import { addCommission, completeLevel, createGuildState, findCommission, migrate, startLevel } from '../../src/core/state';
 import { submitCommission } from '../../src/core/submit';
@@ -35,12 +40,30 @@ describe('加分關：什麼時候開放', () => {
     expect(unlocked(s, 'k1')).toBe(true);
   });
 
-  it('其他部位的課程沒有加分關', () => {
+  it('色彩學（配色）、字體設計（名牌）也有：做完計時任務才開放；手繪基礎（草稿）沒有', () => {
     let s = createGuildState(OC, 1);
     for (const course of ['typography', 'color', 'drawing'] as const) {
-      s = finishTasks(add(s, course, course), course, 5);
+      s = finishTasks(add(s, course, course), course, 4);
       expect(unlocked(s, course)).toBe(false);
+      s = finishTasks(s, course, 5);
+      expect(unlocked(s, course)).toBe(course !== 'drawing');
     }
+  });
+
+  it('每個部位玩哪一種：版面→設定圖急救、配色→配色急救、名牌→名牌急救、草稿沒有', () => {
+    expect(bonusGame('layout')).toBe('sheet');
+    expect(bonusGame('palette')).toBe('palette');
+    expect(bonusGame('nameplate')).toBe('nameplate');
+    expect(bonusGame('sketch')).toBeNull();
+  });
+
+  it('自訂課程選了配色也有加分關，選草稿沒有', () => {
+    let s = addCommission(createGuildState(OC, 1),
+      { course: { label: '攝影', part: 'palette' }, title: '光影', dueAt: 9e12, levels: levelsFrom(['拍照']) }, 10, 'p1');
+    s = addCommission(s, { course: { label: '素描', part: 'sketch' }, title: '石膏', dueAt: 9e12, levels: levelsFrom(['畫']) }, 10, 'p2');
+    s = finishTasks(finishTasks(s, 'p1', 1), 'p2', 1);
+    expect(unlocked(s, 'p1')).toBe(true);
+    expect(unlocked(s, 'p2')).toBe(false);
   });
 
   it('自訂課程選了版面也有；任務被改成 1 個的話，做完 1 個就開放', () => {
@@ -80,6 +103,20 @@ describe('加分關：記分數', () => {
 
   it('找不到委託會丟錯', () => {
     expect(() => recordBonus(s0, 'nope', 50)).toThrow();
+  });
+});
+
+describe('加分關：滿分和評語', () => {
+  it('三種加分關都是滿分 100', () => {
+    expect([SHEET_FULL_SCORE, PALETTE_FULL_SCORE, PLATE_FULL_SCORE]).toEqual([BONUS_FULL_SCORE, BONUS_FULL_SCORE, BONUS_FULL_SCORE]);
+  });
+
+  it('評語：滿分、70 分以上、其他', () => {
+    expect(bonusGrade(100)).toBe('perfect');
+    expect(bonusGrade(85)).toBe('good');
+    expect(bonusGrade(70)).toBe('good');
+    expect(bonusGrade(65)).toBe('retry');
+    expect(bonusGrade(0)).toBe('retry');
   });
 });
 

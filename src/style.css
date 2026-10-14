@@ -273,7 +273,7 @@ button:disabled:hover { background: var(--panel); }
 .part-name { font-size: 11px; font-weight: 700; color: var(--ink-soft); }
 
 /* 交件 */
-.submit-work, .sheet-work { margin: -6px 0 12px; font-size: 13px; font-weight: 700; color: var(--ink-soft); overflow-wrap: anywhere; }
+.submit-work, .sheet-work, .bonus-work { margin: -6px 0 12px; font-size: 13px; font-weight: 700; color: var(--ink-soft); overflow-wrap: anywhere; }
 .submit-pick { padding: 18px 14px; border-radius: 14px; border: 1px dashed rgba(47, 37, 66, 0.3); background: rgba(255, 255, 255, 0.6); text-align: center; }
 .submit-pick .hint { margin: 0 0 12px; font-size: 14px; color: var(--ink); }
 .pick-photos { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
@@ -329,7 +329,7 @@ button:disabled:hover { background: var(--panel); }
 .card .danger:hover { background: #a3134c; }
 
 /* 設定圖急救（T9 平面構成的加分關）：格線、小卡、計分清單 */
-.sheet-game .hint { margin: 0 0 10px; }
+.sheet-game .hint, .bonus-game .hint { margin: 0 0 10px; }
 .sheet-paper {
   max-width: 360px; margin: 0 auto; padding: 10px; overflow: hidden;
   border-radius: 12px; background: #fff; border: 1px solid var(--panel-line); box-shadow: 0 2px 10px rgba(47, 37, 66, 0.08);
@@ -373,18 +373,18 @@ button:disabled:hover { background: var(--panel); }
 .is-quote.is-empty .sheet-text { font-weight: 600; color: var(--ink-soft); }
 .sheet-card.is-name img { width: 100%; height: 100%; object-fit: contain; pointer-events: none; }
 .sheet-ghost { position: absolute; border: 2px dashed var(--c); border-radius: 6px; background: rgba(255, 255, 255, 0.5); pointer-events: none; }
-.sheet-total { margin-top: 8px; font-size: 15px; font-weight: 800; }
-.sheet-rules { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 10px; margin-top: 6px; }
-.sheet-rules h3 { margin: 0 0 3px; font-size: 12px; font-weight: 700; color: var(--ink-soft); }
-.sheet-rules ul { list-style: none; margin: 0; padding: 0; display: grid; gap: 3px; }
-.sheet-rule { display: flex; align-items: center; gap: 5px; font-size: 12px; font-weight: 700; color: var(--ink-soft); }
-.sheet-rule::before {
+.sheet-total, .bonus-total { margin-top: 8px; font-size: 15px; font-weight: 800; }
+.sheet-rules, .bonus-rules { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 10px; margin-top: 6px; }
+.sheet-rules h3, .bonus-rules h3 { margin: 0 0 3px; font-size: 12px; font-weight: 700; color: var(--ink-soft); }
+.sheet-rules ul, .bonus-rules ul { list-style: none; margin: 0; padding: 0; display: grid; gap: 3px; }
+.sheet-rule, .bonus-rule { display: flex; align-items: center; gap: 5px; font-size: 12px; font-weight: 700; color: var(--ink-soft); }
+.sheet-rule::before, .bonus-rule::before {
   content: ''; flex: 0 0 auto; display: inline-grid; place-items: center; width: 15px; height: 15px; border-radius: 50%;
   border: 1.5px solid rgba(47, 37, 66, 0.28); font-size: 10px; line-height: 1; color: #fff;
 }
-.sheet-rule.is-ok { color: var(--ink); }
-.sheet-rule.is-ok::before { content: '✓'; background: var(--c); border-color: var(--c); }
-.sheet-note { margin: 6px 0 0; font-size: 11px; color: var(--ink-soft); }
+.sheet-rule.is-ok, .bonus-rule.is-ok { color: var(--ink); }
+.sheet-rule.is-ok::before, .bonus-rule.is-ok::before { content: '✓'; background: var(--c); border-color: var(--c); }
+.sheet-note, .bonus-note { margin: 6px 0 0; font-size: 11px; color: var(--ink-soft); }
 .sheet-quote { display: flex; align-items: center; gap: 8px; margin-top: 8px; }
 .sheet-quote label { flex: 0 0 auto; font-size: 13px; font-weight: 700; color: var(--ink-soft); }
 .sheet-quote input {
@@ -393,11 +393,60 @@ button:disabled:hover { background: var(--panel); }
   -webkit-user-select: text; user-select: text;
 }
 .sheet-quote input:focus-visible { outline: 2px solid var(--accent); outline-offset: 1px; }
-.sheet-panel .form-actions { margin-top: 10px; }
-.sheet-result { margin-top: 12px; text-align: center; outline: none; }
-.sheet-result-score { display: block; font-size: 40px; font-weight: 800; line-height: 1.1; color: var(--accent); }
-.sheet-result p { margin: 4px 0 0; font-size: 14px; font-weight: 700; }
-.sheet-result .card-note { font-weight: 400; }
+.sheet-panel .form-actions, .bonus-panel .form-actions { margin-top: 10px; }
+.sheet-result, .bonus-result { margin-top: 12px; text-align: center; outline: none; }
+.sheet-result-score, .bonus-result-score { display: block; font-size: 40px; font-weight: 800; line-height: 1.1; color: var(--accent); }
+.sheet-result p, .bonus-result p { margin: 4px 0 0; font-size: 14px; font-weight: 700; }
+.sheet-result .card-note, .bonus-result .card-note { font-weight: 400; }
+
+/* 配色急救（T16 色彩學的加分關）：小設定圖跟著選的顏色變，下面每個地方一排色票 */
+.pg-preview {
+  --bg: #fff; --text: #222; --main: #ddd; --accent: #ff6f97;
+  display: flex; align-items: center; gap: 12px; padding: 12px 14px; border-radius: 12px;
+  background: var(--bg); border: 1px solid var(--panel-line); transition: background 0.2s;
+}
+.pg-figure { flex: 0 0 auto; position: relative; width: 100px; height: 118px; display: grid; place-items: end center; }
+.pg-figure::before {
+  content: ''; position: absolute; left: 2px; right: 2px; top: 10px; aspect-ratio: 1; border-radius: 50%;
+  background: var(--main); transition: background 0.2s;
+}
+.pg-figure img { position: relative; max-width: 100%; max-height: 116px; object-fit: contain; }
+.pg-info { flex: 1 1 auto; min-width: 0; display: grid; justify-items: start; gap: 6px; color: var(--text); transition: color 0.2s; }
+.pg-name { font-size: 22px; font-weight: 800; line-height: 1.15; overflow-wrap: anywhere; }
+.pg-line { display: block; width: 48px; height: 5px; border-radius: 3px; background: var(--accent); }
+.pg-quote { font-size: 13px; font-weight: 700; overflow-wrap: anywhere; }
+.pg-stars { font-size: 14px; letter-spacing: 3px; color: var(--accent); }
+.pg-rows { display: grid; gap: 6px; margin-top: 10px; }
+.pg-row { display: flex; align-items: center; gap: 8px; }
+.pg-role { flex: 0 0 3.2em; font-size: 13px; font-weight: 700; color: var(--ink-soft); }
+.pg-swatches { display: flex; flex-wrap: wrap; gap: 5px; }
+.pg-swatch { position: relative; display: block; cursor: pointer; }
+/* OC 的顏色和後面的白灰黑中間空一點 */
+.pg-swatch:not(.is-neutral) + .is-neutral { margin-left: 6px; }
+.pg-swatch span { display: block; width: 26px; height: 26px; border-radius: 50%; border: 1px solid rgba(47, 37, 66, 0.25); }
+.pg-swatch input:checked + span { box-shadow: 0 0 0 2px #fff, 0 0 0 4px var(--ink); }
+.pg-swatch input:focus-visible + span { outline: 2px solid var(--accent); outline-offset: 5px; }
+.pg-board.is-locked .pg-swatch { cursor: default; }
+
+/* 名牌急救（T16 字體設計的加分關）：名牌上淡淡的方格（一格是四分之一個字）和正中間的虛線 */
+.pl-board { padding: 6px 0 2px; }
+.pl-plate {
+  position: relative; container-type: inline-size; touch-action: none; border-radius: 10px;
+  border: 2px solid var(--ink); background-color: #fff; box-shadow: 0 2px 10px rgba(47, 37, 66, 0.12);
+  background-image: linear-gradient(to right, rgba(47, 37, 66, 0.07) 1px, transparent 1px),
+    linear-gradient(to bottom, rgba(47, 37, 66, 0.07) 1px, transparent 1px);
+}
+.pl-guide { position: absolute; pointer-events: none; opacity: 0.8; }
+.pl-guide.is-h { left: 0; right: 0; top: 50%; border-top: 1px dashed var(--c); }
+.pl-guide.is-v { top: 0; bottom: 0; left: 50%; border-left: 1px dashed var(--c); }
+.pl-glyph {
+  position: absolute; display: grid; place-items: center; border-radius: 4px; cursor: grab; touch-action: none; outline: none;
+  font-weight: 800; line-height: 1; color: var(--ink); font-size: calc(400cqw / var(--cols) * 0.78);
+  transition: left 0.08s, top 0.08s;
+}
+.pl-glyph:focus-visible { outline: 2px solid var(--accent); outline-offset: 1px; }
+.pl-glyph.is-dragging { cursor: grabbing; background: rgba(255, 111, 151, 0.14); transition: none; }
+.pl-plate.is-locked .pl-glyph { cursor: default; }
 
 /* 放大看照片 */
 .viewer { margin: 0; text-align: center; }
@@ -442,7 +491,7 @@ button:disabled:hover { background: var(--panel); }
 .pie .slice.just-lit { transform-box: view-box; transform-origin: 50% 50%; animation: light-up 0.7s cubic-bezier(0.2, 0.8, 0.3, 1.2) both; }
 @media (prefers-reduced-motion: reduce) {
   .pie .slice.just-lit, .toast, .toast.is-leaving { animation: none; }
-  .sheet-card, .sheet-card.is-dragging { transition: none; }
+  .sheet-card, .sheet-card.is-dragging, .pl-glyph, .pg-preview, .pg-info, .pg-figure::before { transition: none; }
 }
 @media (max-width: 640px) {
   .title p { display: none; }

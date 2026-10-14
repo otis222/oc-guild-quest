@@ -149,35 +149,37 @@ describe('委託與任務的操作', () => {
   });
 });
 
-describe('加分關（設定圖急救）', () => {
-  const result = (score: number) => ({ score, passed: ['feet', 'text'], ms: 42_000, moves: 9 });
+describe('作品集', () => {
+  it('打開作品集記 gallery_opened，帶著從哪裡打開、有幾件', async () => {
+    const { actions, kv } = await setup();
+    await actions.noteGalleryOpened('card', 3);
+    expect((await loadEvents(kv)).at(-1)).toMatchObject({ type: 'gallery_opened', data: { via: 'card', count: 3 } });
+  });
+});
 
-  it('開始記 bonus_started；計分記 bonus_finished，存下最高分', async () => {
+describe('加分關', () => {
+  const result = (score: number) => ({ score, passed: ['read', 'quiet'], ms: 42_000, moves: 9 });
+
+  it('開始記 bonus_started；計分記 bonus_finished，存下最高分；事件看得出是哪一種加分關', async () => {
     const { actions, cId, store, kv, clock } = await setup();
-    await actions.startBonus(cId);
-    expect(await actions.finishBonus(cId, result(65))).toBe(65);
+    await actions.startBonus(cId, 'palette');
+    expect(await actions.finishBonus(cId, 'palette', result(65))).toBe(65);
     expect(store.state.commissions[0].bonusBest).toBe(65);
     expect((await loadState(kv))!.commissions[0].bonusBest).toBe(65);
     const events = (await loadEvents(kv)).slice(-2);
-    expect(events[0]).toEqual({ t: clock.now, type: 'bonus_started', commissionId: cId });
+    expect(events[0]).toEqual({ t: clock.now, type: 'bonus_started', commissionId: cId, data: { game: 'palette' } });
     expect(events[1]).toEqual({
       t: clock.now, type: 'bonus_finished', commissionId: cId,
-      data: { score: 65, best: 65, passed: ['feet', 'text'], ms: 42_000, moves: 9 },
+      data: { game: 'palette', score: 65, best: 65, passed: ['read', 'quiet'], ms: 42_000, moves: 9 },
     });
   });
 
   it('第二次比較低：最高分不變，事件照記這次的分數', async () => {
     const { actions, cId, store, kv } = await setup();
-    await actions.finishBonus(cId, result(85));
-    expect(await actions.finishBonus(cId, result(50))).toBe(85);
+    await actions.finishBonus(cId, 'sheet', result(85));
+    expect(await actions.finishBonus(cId, 'sheet', result(50))).toBe(85);
     expect(store.state.commissions[0].bonusBest).toBe(85);
-    expect((await loadEvents(kv)).at(-1)?.data).toMatchObject({ score: 50, best: 85 });
-  });
-
-  it('打開作品集記 gallery_opened，帶著從哪裡打開、有幾件', async () => {
-    const { actions, kv } = await setup();
-    await actions.noteGalleryOpened('card', 3);
-    expect((await loadEvents(kv)).at(-1)).toMatchObject({ type: 'gallery_opened', data: { via: 'card', count: 3 } });
+    expect((await loadEvents(kv)).at(-1)?.data).toMatchObject({ game: 'sheet', score: 50, best: 85 });
   });
 
   it('改台詞：存進 OC，不記事件；一樣的不算有變', async () => {

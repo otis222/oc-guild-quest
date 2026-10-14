@@ -94,13 +94,18 @@ export function hexToRgb(color: string): Vec3 {
   return [(v >> 16) & 255, (v >> 8) & 255, v & 255];
 }
 
-/** 最鮮豔的顏色（最亮的通道減最暗的通道最大），主角腳下的光圈用；一樣鮮豔時取面積大的。沒有顏色回傳 null */
+/** 彩度（鮮豔的程度）：最亮的通道減最暗的通道，0～255；白、灰、黑是 0 */
+export function chroma(color: string): number {
+  const rgb = hexToRgb(color);
+  return Math.max(...rgb) - Math.min(...rgb);
+}
+
+/** 最鮮豔的顏色（彩度最高），主角腳下的光圈用；一樣鮮豔時取面積大的。沒有顏色回傳 null */
 export function mostVivid(palette: readonly string[]): string | null {
   let best: string | null = null, bestChroma = -1;
   for (const c of palette) {
-    const rgb = hexToRgb(c);
-    const chroma = Math.max(...rgb) - Math.min(...rgb);
-    if (chroma > bestChroma) { best = c; bestChroma = chroma; }
+    const v = chroma(c);
+    if (v > bestChroma) { best = c; bestChroma = v; }
   }
   return best;
 }

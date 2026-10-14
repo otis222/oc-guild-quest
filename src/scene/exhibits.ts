@@ -24,6 +24,8 @@ export interface Exhibits {
   show(slot: number, tex: THREE.Texture | null): void;
   /** 點到第幾張展品的相框；沒點到回傳 null */
   slotAt(rig: CameraRig, x: number, y: number): number | null;
+  /** 第 slot 張展品那座展台的世界座標（頂面中心）；沒有這個位置回傳 null（T14 公會成員圍觀用） */
+  pedestalPos(slot: number): THREE.Vector3 | null;
   update(t: number): void;
 }
 
@@ -31,6 +33,7 @@ interface Slot {
   holder: THREE.Group;
   gem: THREE.Mesh;
   base: number;
+  pedestal: Pedestal;
 }
 
 /** 照片的寬高（世界座標）：等比例放進 MAX_W × MAX_H */
@@ -61,7 +64,7 @@ export function createExhibits(pedestals: readonly Pedestal[]): Exhibits {
     holder.position.set(p.top.x, base, p.top.z);
     holder.visible = false;
     p.group.add(holder);
-    return { holder, gem: p.gem, base };
+    return { holder, gem: p.gem, base, pedestal: p };
   });
 
   return {
@@ -85,6 +88,13 @@ export function createExhibits(pedestals: readonly Pedestal[]): Exhibits {
     slotAt(rig, x, y) {
       const i = slots.findIndex((s) => s.holder.visible && rig.hits(x, y, [s.holder]));
       return i < 0 ? null : i;
+    },
+
+    pedestalPos(slot) {
+      const s = slots[slot];
+      if (!s) return null;
+      s.pedestal.group.updateMatrixWorld();
+      return s.pedestal.group.localToWorld(s.pedestal.top.clone());
     },
 
     update(t) {

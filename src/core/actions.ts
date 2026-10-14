@@ -1,6 +1,6 @@
 // 玩家的操作：改狀態 → 存檔 → 記事件（企劃表 7.6）。
 // 事件只在狀態真的有變時才記：連按兩次「完成」、或兩個分頁都按，也只記一次、只點亮一片。
-import { recordBonus, setOcQuote } from './bonus';
+import { recordBonus, setOcQuote, type BonusGame } from './bonus';
 import { courseInfo } from './courses';
 import { logEvent, type EventFields } from './events';
 import { newId } from './id';
@@ -23,15 +23,15 @@ export interface SubmitInput {
   nameplate?: Blob;
 }
 
-/** 加分關（設定圖急救）按「完成排版」時的結果 */
+/** 加分關按「完成」時的結果（設定圖急救、配色急救、名牌急救） */
 export interface BonusResult {
   /** 0～100 */
   score: number;
-  /** 做到的規則（sheet.ts 的 SheetRuleId） */
+  /** 做到的規則（sheet.ts、paletteGame.ts、plateGame.ts 的規則 id） */
   passed: readonly string[];
-  /** 從這一局開始到按「完成排版」花了多久 */
+  /** 從這一局開始到按「完成」花了多久 */
   ms: number;
-  /** 移動小卡幾次（拖曳、點一下放進格線、方向鍵） */
+  /** 動了幾次（設定圖：移動小卡；配色：換顏色；名牌：移動字） */
   moves: number;
 }
 
@@ -55,10 +55,10 @@ export interface Actions {
   submitCommission(commissionId: string, input: SubmitInput): Promise<boolean>;
   /** 點大廳展台上的展品（放大看） */
   noteExhibitOpened(slot: number, photoId: string): Promise<void>;
-  /** 開始一局加分關（打開設定圖急救、或按「再排一次」） */
-  startBonus(commissionId: string): Promise<void>;
+  /** 開始一局加分關（打開、或按「再玩一次」）；game 是哪一種加分關，記在事件裡 */
+  startBonus(commissionId: string, game: BonusGame): Promise<void>;
   /** 加分關計分：記下這張委託的最高分，回傳最高分 */
-  finishBonus(commissionId: string, result: BonusResult): Promise<number>;
+  finishBonus(commissionId: string, game: BonusGame, result: BonusResult): Promise<number>;
   /** 改 OC 的台詞（設定圖上的台詞卡）；回傳有沒有變 */
   setOcQuote(quote: string): Promise<boolean>;
   /** 打開公會作品集（T15）：via 是從哪裡打開的（card：設定卡、exhibit：大廳展品），count 是有幾件作品 */
@@ -178,15 +178,17 @@ export function createActions(kv: KV, store: GuildStore, clock: () => number = D
       await log('exhibit_opened', { ...(c ? { commissionId: c.id } : {}), data: { slot, photoId } }, clock());
     },
 
-    async startBonus(cId) {
-      await log('bonus_started', { commissionId: cId }, clock());
+    async startBonus(cId, game) {
+      await log('bonus_started', { commissionId: cId, data: { game } }, clock());
     },
 
-    async finishBonus(cId, r) {
+    async finishBonus(cId, game, r) {
       const now = clock();
       const { after } = await apply((s) => recordBonus(s, cId, r.score));
       const best = findCommission(after, cId).bonusBest ?? r.score;
-      await log('bonus_finished', { commissionId: cId, data: { score: r.score, best, passed: [...r.passed], ms: r.ms, moves: r.moves } }, now);
+      await log('bonus_finished', {
+        commissionId: cId, data: { game, score: r.score, best, passed: [...r.passed], ms: r.ms, moves: r.moves },
+      }, now);
       return best;
     },
 

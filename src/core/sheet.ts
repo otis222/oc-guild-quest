@@ -165,7 +165,3 @@ export function messyLayout(rand: () => number = Math.random): SheetLayout {
   return Object.fromEntries(entries) as Record<SheetCardId, CardPos>;
 }
 
-/** 結果的評語：滿分、70 分以上、其他 */
-export type SheetGrade = 'perfect' | 'good' | 'retry';
-export const sheetGrade = (score: number): SheetGrade =>
-  (score >= SHEET_FULL_SCORE ? 'perfect' : score >= 70 ? 'good' : 'retry');

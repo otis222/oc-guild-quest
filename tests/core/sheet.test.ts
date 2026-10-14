@@ -1,8 +1,10 @@
 import { describe, expect, it } from 'vitest';
 import {
   CARD_SIZE, clampToSheet, looseCards, messyLayout, nudgeCard, scoreSheet, SHEET_CARDS, SHEET_COLS, SHEET_FULL_SCORE, SHEET_ROWS,
-  SHEET_RULES, sheetGrade, snapCard, type CardPos, type SheetCardId, type SheetLayout,
+  SHEET_RULES, snapCard, type CardPos, type SheetCardId, type SheetLayout,
 } from '../../src/core/sheet';
+import { BONUS_FULL_SCORE } from '../../src/core/bonus';
+import { seeded } from '../helpers/seeded';
 
 const at = (x: number, y: number): CardPos => ({ x, y, placed: true, tilt: 0 });
 const loose = (x: number, y: number): CardPos => ({ x, y, placed: false, tilt: 5 });
@@ -11,23 +13,13 @@ const PERFECT: SheetLayout = { name: at(0, 0), quote: at(0, 1), front: at(0, 3),
 const layout = (changes: Partial<Record<SheetCardId, CardPos>>): SheetLayout => ({ ...PERFECT, ...changes });
 const passed = (l: SheetLayout): string[] => scoreSheet(l).passed;
 
-/** 測試用的固定亂數 */
-function seeded(seed: number): () => number {
-  let a = seed;
-  return () => {
-    a = (a + 0x6d2b79f5) | 0;
-    let t = Math.imul(a ^ (a >>> 15), 1 | a);
-    t = (t + Math.imul(t ^ (t >>> 7), 61 | t)) ^ t;
-    return ((t ^ (t >>> 14)) >>> 0) / 4294967296;
-  };
-}
 
 describe('設定圖急救：計分規則', () => {
   it('對齊 50 分、留白 50 分，滿分 100', () => {
     const sum = (kind: string): number => SHEET_RULES.filter((r) => r.kind === kind).reduce((a, r) => a + r.points, 0);
     expect(sum('align')).toBe(50);
     expect(sum('space')).toBe(50);
-    expect(SHEET_FULL_SCORE).toBe(100);
+    expect(SHEET_FULL_SCORE).toBe(BONUS_FULL_SCORE);
   });
 
   it('好的排法都是 100 分：靠左、置中、靠右，文字放上面或下面都可以', () => {
@@ -156,12 +148,3 @@ describe('設定圖急救：一開始亂掉的樣子', () => {
   });
 });
 
-describe('設定圖急救：評語', () => {
-  it('滿分、70 分以上、其他', () => {
-    expect(sheetGrade(100)).toBe('perfect');
-    expect(sheetGrade(85)).toBe('good');
-    expect(sheetGrade(70)).toBe('good');
-    expect(sheetGrade(65)).toBe('retry');
-    expect(sheetGrade(0)).toBe('retry');
-  });
-});

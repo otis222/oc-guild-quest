@@ -11,6 +11,7 @@ import { cellOf, monthDay } from './core/ocCard';
 import { pickGuildMembers, reassignMembers, uploadedPhotoId, uploadSpriteRef } from './core/oc';
 import { createGuildState, currentWork, findCommission, findLevel, loadState, nextLevel, saveState } from './core/state';
 import { createFpsGuard } from './core/fpsGuard';
+import { galleryWorks } from './core/gallery';
 import { isResearchMode } from './core/research';
 import { deletePhoto, getPhoto, idbKV, putPhoto, requestPersistence, type KV } from './core/storage';
 import { createGuildStore, type GuildStore } from './core/store';
@@ -34,9 +35,10 @@ import { openBoard } from './ui/board';
 import { openChangeLook } from './ui/changeLook';
 import { COPY } from './ui/copy';
 import { showCreateOcCard, type SpriteChoice } from './ui/createOC';
+import { openGallery } from './ui/gallery';
 import { createHud, showLoadingMessage, type Hud } from './ui/hud';
 import { openOcCard, type OcCardOptions } from './ui/ocCard';
-import { openPhotoViewer } from './ui/photoViewer';
+import { openPhotoViewer, type PhotoViewerOptions } from './ui/photoViewer';
 import { createPhotoUrls } from './ui/photos';
 import { courseColor, pieResult } from './ui/pie';
 import { openSheetGame } from './ui/sheetGame';
@@ -255,21 +257,28 @@ function startGuild({ kv, manifest, store, lobby, player, look: initialLook, pla
       save: changeLook,
       onClosed: () => showCard(),
     }),
-    // 從設定卡放大看作業，關掉後回到設定卡
-    onViewWork: (c) => viewWork(c, COPY.viewer.work, () => showCard()),
+    // 從設定卡放大看作業、打開作品集，關掉後都回到設定卡
+    onViewWork: (c) => viewWork(c, COPY.viewer.work, { onClose: () => showCard() }),
+    onOpenGallery: () => showGallery('card'),
   }, opts);
 
   /** 放大看一張委託交的作業照片 */
-  function viewWork(c: Commission, title: string, onClose?: () => void): void {
+  function viewWork(c: Commission, title: string, more: Pick<PhotoViewerOptions, 'action' | 'onClose'> = {}): void {
     const photoId = c.photoId;
     if (!photoId) return;
     photos.get(photoId).then((url) => {
       if (!url) return;
       openPhotoViewer({
-        url, title, alt: COPY.submit.photoAlt(c.title), onClose,
+        url, title, alt: COPY.submit.photoAlt(c.title), ...more,
         caption: COPY.viewer.caption(courseInfo(store.state, c.course).label, c.title, monthDay(c.submittedAt ?? Date.now())),
       });
     }).catch(warn('照片讀取失敗'));
+  }
+
+  /** 公會作品集（T15）：via 是從哪裡打開的（card：設定卡、exhibit：大廳展品）；從設定卡打開的，關掉回到設定卡 */
+  function showGallery(via: 'card' | 'exhibit'): void {
+    void actions.noteGalleryOpened(via, galleryWorks(store.state).length);
+    openGallery({ store, photos, onClosed: via === 'card' ? () => showCard() : undefined });
   }
 
   /** 交件畫面；交成功後主角跳一下說「交件了！」，大廳浮出小提示 */
@@ -399,7 +408,7 @@ function startGuild({ kv, manifest, store, lobby, player, look: initialLook, pla
       if (!photoId) return;
       void actions.noteExhibitOpened(slot, photoId);
       const c = commissionOfPhoto(store.state, photoId);
-      if (c) viewWork(c, COPY.viewer.exhibit);
+      if (c) viewWork(c, COPY.viewer.exhibit, { action: { label: COPY.gallery.all, onClick: () => showGallery('exhibit') } });
     },
     openCard() {
       void actions.noteOcCardOpened('hud');

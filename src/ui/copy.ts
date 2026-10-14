@@ -149,6 +149,21 @@ export const COPY = {
     saveFailed: '交件沒成功，再按一次。',
   },
 
+  /** 公會作品集（T15） */
+  gallery: {
+    /** 設定卡上的按鈕 */
+    open: (n: number) => `作品集（${n}）`,
+    title: (n: number) => `公會作品集（${n}）`,
+    empty: '還沒有作品。交件後，作業照片會放在這裡。',
+    date: (md: string) => `${md} 交件`,
+    onExhibit: '展台上',
+    missing: '讀不到照片',
+    itemAria: (course: string, work: string, md: string, onExhibit: boolean) =>
+      `${course}・${work}，${md} 交件${onExhibit ? '，在大廳展台上' : ''}`,
+    /** 放大看大廳展品時的按鈕 */
+    all: '看全部作品',
+  },
+
   /** 放大看照片 */
   viewer: {
     exhibit: '公會展品',

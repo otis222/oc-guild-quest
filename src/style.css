@@ -198,7 +198,8 @@ button:disabled:hover { background: var(--panel); }
 .oc-meter { display: flex; align-items: center; gap: 8px; font-size: 12px; font-weight: 700; color: var(--ink-soft); }
 .oc-meter .bar { flex: 1 1 auto; height: 8px; overflow: hidden; border-radius: 4px; background: #ece6f2; }
 .oc-meter .bar > span { display: block; height: 100%; border-radius: 4px; background: var(--accent); }
-.card .oc-change { justify-self: start; margin-top: 2px; padding: 6px 12px; font-size: 13px; box-shadow: none; background: #fff; }
+.oc-btns { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 2px; }
+.card .oc-btns button { padding: 6px 12px; font-size: 13px; box-shadow: none; background: #fff; }
 .oc-sec { margin-top: 14px; scroll-margin: 16px 0; }
 .oc-sec-head { display: flex; align-items: baseline; justify-content: space-between; gap: 8px; margin-bottom: 6px; }
 .oc-sec-name { font-size: 14px; font-weight: 800; }
@@ -402,6 +403,35 @@ button:disabled:hover { background: var(--panel); }
 .viewer { margin: 0; text-align: center; }
 .viewer img { display: block; max-width: 100%; max-height: 62vh; margin: 0 auto; border-radius: 12px; object-fit: contain; }
 .viewer figcaption { margin-top: 10px; font-size: 13px; font-weight: 700; color: var(--ink-soft); overflow-wrap: anywhere; }
+.card .viewer-action { display: block; margin: 12px auto 0; padding: 8px 16px; box-shadow: none; background: #fff; }
+
+/* 公會作品集（T15）：兩欄的照片格子 */
+.gallery { list-style: none; margin: 0; padding: 0; display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 14px 10px; }
+.gallery li { min-width: 0; }
+.card .gallery-item {
+  width: 100%; display: grid; gap: 4px; padding: 0; text-align: left; border: 0; border-radius: 12px;
+  background: none; box-shadow: none; -webkit-backdrop-filter: none; backdrop-filter: none;
+}
+.card .gallery-item:hover { background: none; }
+.card .gallery-item:disabled { opacity: 1; }
+.gallery-thumb {
+  position: relative; display: block; aspect-ratio: 1; overflow: hidden; border-radius: 12px;
+  border: 1px solid var(--panel-line); border-bottom: 4px solid var(--c); background: #ece6f2;
+}
+.gallery-thumb img { display: block; width: 100%; height: 100%; object-fit: cover; }
+.gallery-thumb img:not([src]) { visibility: hidden; }
+.gallery-badge {
+  position: absolute; top: 6px; left: 6px; padding: 2px 8px; border-radius: 999px;
+  font-size: 11px; font-weight: 700; color: #fff; background: rgba(47, 37, 66, 0.72);
+}
+.gallery-missing { position: absolute; inset: 0; display: grid; place-items: center; font-size: 12px; font-weight: 700; color: var(--ink-soft); }
+.gallery-title { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: 13px; font-weight: 700; }
+.gallery-meta { display: flex; align-items: center; gap: 6px; font-size: 11px; font-weight: 700; color: var(--ink-soft); white-space: nowrap; }
+.gallery-course { flex: 0 1 auto; min-width: 0; overflow: hidden; text-overflow: ellipsis; }
+.gallery-course::before {
+  content: ''; display: inline-block; width: 8px; height: 8px; margin-right: 4px; border-radius: 50%; background: var(--c);
+}
+.gallery-empty { margin: 0; font-size: 14px; line-height: 1.6; color: var(--ink-soft); }
 
 /* 剛完成的那一片：0.7 秒點亮 */
 @keyframes light-up {

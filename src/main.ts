@@ -159,7 +159,7 @@ async function main(): Promise<void> {
   hud.hideLoading();
   if (isNew) player.hop();
 
-  guild = startGuild({ kv, manifest, store: createGuildStore(kv, state), lobby, player, look, plaza, exhibits, hud, board });
+  guild = startGuild({ kv, manifest, store: createGuildStore(kv, state), lobby, player, look, plaza, exhibits, hud, board, rig });
   hud.onBoard(guild.openBoard);
   hud.onCard(guild.openCard);
   guild.syncWork(true);
@@ -203,13 +203,18 @@ interface GuildDeps {
   exhibits: Exhibits;
   hud: Hud;
   board: Board;
+  rig: CameraRig;
 }
+
+/** 交件後（T14）：公會成員圍觀新展品多久、鏡頭轉過去看多久（秒） */
+const GATHER_SECONDS = 12;
+const PEEK_SECONDS = 6;
 
 /** 跟著截止時間變的大廳（T12 天色、T13 委託板上的紙）多久重新檢查一次：頁面開著跨過門檻那一刻也會變 */
 const AMBIENT_CHECK_MS = 60_000;
 
 /** 存檔準備好之後：委託板、任務計時、OC 設定卡、換造型、交件、加分關、展品、主角做任務的樣子、截止前的天色 */
-function startGuild({ kv, manifest, store, lobby, player, look: initialLook, plaza, exhibits, hud, board }: GuildDeps): Guild {
+function startGuild({ kv, manifest, store, lobby, player, look: initialLook, plaza, exhibits, hud, board, rig }: GuildDeps): Guild {
   const actions = createActions(kv, store);
   const wakeLock = createWakeLock();
   const photos = createPhotoUrls(kv);
@@ -284,6 +289,13 @@ function startGuild({ kv, manifest, store, lobby, player, look: initialLook, pla
       player.hop();
       player.say(COPY.speech.submitted);
       const s = store.state, c = findCommission(s, commissionId), course = courseInfo(s, c.course);
+      // 公會成員圍到新展品前面，鏡頭轉過去看一下（T14）
+      const slot = c.photoId ? s.exhibits.indexOf(c.photoId) : -1;
+      const at = slot >= 0 ? exhibits.pedestalPos(slot) : null;
+      if (at) {
+        lobby.gather(at, COPY.speech.admire, GATHER_SECONDS);
+        rig.peek(at, PEEK_SECONDS);
+      }
       showCardToast({
         cell: cellOf(c), course, title: COPY.toast.submitted, detail: COPY.toast.submittedDetail(c.title, s.guildLevel),
         result: pieResult(c, course.part, photos.now),

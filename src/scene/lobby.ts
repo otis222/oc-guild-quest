@@ -30,8 +30,8 @@ export interface Lobby {
   populate(player: CharacterSpec, members: readonly CharacterSpec[]): Chibi;
   /** 點到哪隻小人（最前面那隻）；沒點到回傳 null */
   pickAt(x: number, y: number): Chibi | null;
-  /** 小人被點到：跳一下說一句話 */
-  poke(c: Chibi): void;
+  /** 小人被點到：跳一下說一句話（line 沒給就隨機挑一句） */
+  poke(c: Chibi, line?: string): void;
   /** 主角走到點的地板位置（點到廣場外面、或正在做任務就不動） */
   walkTo(x: number, y: number): void;
   /**
@@ -84,8 +84,8 @@ export function createLobby(world: ChibiWorld, plaza: Plaza): Lobby {
       return hits[0] ?? null;
     },
 
-    poke(c) {
-      c.hop(); c.say(pick(POKED));
+    poke(c, line) {
+      c.hop(); c.say(line ?? pick(POKED));
     },
 
     walkTo(x, y) {

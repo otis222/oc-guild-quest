@@ -38,8 +38,8 @@ export interface BonusResult {
 export interface Actions {
   /** 接新委託（委託單上新加的課程一起建立），回傳委託 id */
   createCommission(draft: CommissionDraft): Promise<string>;
-  /** 下面幾個回傳「狀態有沒有變」 */
-  startLevel(commissionId: string, levelId: string): Promise<boolean>;
+  /** 下面幾個回傳「狀態有沒有變」。via：從哪裡開始的（board：委託板、toast：大廳小提示的「下一個任務」），記在事件裡 */
+  startLevel(commissionId: string, levelId: string, via?: string): Promise<boolean>;
   pauseLevel(commissionId: string, levelId: string): Promise<boolean>;
   resumeLevel(commissionId: string, levelId: string): Promise<boolean>;
   extendLevel(commissionId: string, levelId: string): Promise<boolean>;
@@ -114,9 +114,9 @@ export function createActions(kv: KV, store: GuildStore, clock: () => number = D
       return id;
     },
 
-    startLevel: (cId, lId) => levelAction(startLevel, cId, lId, async (_old, next, now, before, after) => {
+    startLevel: (cId, lId, via) => levelAction(startLevel, cId, lId, async (_old, next, now, before, after) => {
       await logAutoPaused(before, after, lId, now);
-      await log('level_started', { ...ids(cId, lId), data: { minutes: next.minutes } }, now);
+      await log('level_started', { ...ids(cId, lId), data: { minutes: next.minutes, ...(via ? { via } : {}) } }, now);
     }),
 
     pauseLevel: (cId, lId) => levelAction(pauseLevel, cId, lId, async (_old, _next, now) => {

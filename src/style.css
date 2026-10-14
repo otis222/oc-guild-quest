@@ -200,6 +200,8 @@ button:disabled:hover { background: var(--panel); }
 .oc-meter .bar > span { display: block; height: 100%; border-radius: 4px; background: var(--accent); }
 .oc-btns { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 2px; }
 .card .oc-btns button { padding: 6px 12px; font-size: 13px; box-shadow: none; background: #fff; }
+/* 看設定圖（T18） */
+.card .oc-sheet { width: 100%; margin-top: 10px; padding: 9px; font-size: 14px; font-weight: 700; box-shadow: none; background: #fff; }
 /* 畫圖時間（T17）：存了多少、開始畫圖 */
 .oc-draw {
   display: flex; align-items: center; justify-content: space-between; gap: 10px; margin-top: 10px;
@@ -469,6 +471,15 @@ body:has(.timer-layer) .toast { visibility: hidden; }
 .viewer img { display: block; max-width: 100%; max-height: 62vh; margin: 0 auto; border-radius: 12px; object-fit: contain; }
 .viewer figcaption { margin-top: 10px; font-size: 13px; font-weight: 700; color: var(--ink-soft); overflow-wrap: anywhere; }
 .card .viewer-action { display: block; margin: 12px auto 0; padding: 8px 16px; box-shadow: none; background: #fff; }
+
+/* OC 設定圖成品（T18）：畫好的圖片（手機長按也可以存）、存成圖片 */
+.cs-wait { margin: 48px 0; text-align: center; font-size: 14px; color: var(--ink-soft); }
+.cs-image {
+  display: block; width: auto; height: auto; max-width: 100%; max-height: calc(100vh - 230px); margin: 0 auto;
+  border-radius: 10px; border: 1px solid var(--panel-line); box-shadow: 0 2px 10px rgba(47, 37, 66, 0.1);
+}
+.cs-note { margin-top: 6px; text-align: center; }
+.cs-msg { text-align: center; }
 
 /* 公會作品集（T15）：兩欄的照片格子 */
 .gallery { list-style: none; margin: 0; padding: 0; display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 14px 10px; }

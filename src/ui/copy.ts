@@ -221,6 +221,27 @@ export const COPY = {
     saveFailed: '分數沒記到，再按一次。',
   },
 
+  /** OC 設定圖成品（企劃表 T18） */
+  charSheet: {
+    /** 設定卡上的按鈕 */
+    open: '看設定圖',
+    title: 'OC 設定圖',
+    drawing: '正在畫設定圖…',
+    failed: '設定圖沒畫出來。關掉再開一次試試。',
+    alt: (name: string) => `${name}的 OC 設定圖：名字、台詞、三視圖、配色、版面、草稿`,
+    save: '存成圖片',
+    note: '圖片在這台裝置上做好，不會上傳。',
+    shared: '分享好了。',
+    downloaded: '圖片下載好了。',
+    saveFailed: '沒存成功，再按一次。',
+    // 下面是畫在設定圖上的字
+    heading: 'OC 設定圖',
+    level: (n: number) => `公會等級 ${n}`,
+    quoteEmpty: '（還沒有台詞）',
+    missing: (course: string) => `交${course}作業後出現`,
+    footer: (date: string) => `公會委託單・${date}`,
+  },
+
   /** 作業換畫圖時間（企劃表 T17）：完成一個任務存 5 分鐘 */
   draw: {
     title: '畫圖時間',

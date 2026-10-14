@@ -27,6 +27,8 @@ export const EVENT_LABELS: Readonly<Record<EventType, string>> = {
   gallery_opened: '看作品集',
   draw_started: '開始畫圖',
   draw_finished: '結束畫圖',
+  sheet_opened: '看設定圖',
+  sheet_saved: '存設定圖',
 };
 
 const pad = (n: number): string => String(n).padStart(2, '0');

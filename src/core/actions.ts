@@ -1,6 +1,7 @@
 // 玩家的操作：改狀態 → 存檔 → 記事件（企劃表 7.6）。
 // 事件只在狀態真的有變時才記：連按兩次「完成」、或兩個分頁都按，也只記一次、只點亮一片。
 import { recordBonus, setOcQuote, type BonusGame } from './bonus';
+import { charSheetData, recordSheetBest } from './charSheet';
 import { courseInfo } from './courses';
 import { drawElapsedMs, drawPhase, finishDrawing, pauseDrawing, resumeDrawing, startDrawing } from './drawTime';
 import { logEvent, type EventFields } from './events';
@@ -12,7 +13,7 @@ import { deletePhoto, putPhoto, type KV } from './storage';
 import type { GuildStore } from './store';
 import { commissionOfPhoto, submitCommission } from './submit';
 import { EXTEND_MINUTES, timerPhase } from './timer';
-import type { EventType, GuildState, Level } from './types';
+import type { EventType, GuildState, Level, SheetPositions } from './types';
 
 /** 交件要存的東西（照片已經在瀏覽器裡縮好） */
 export interface SubmitInput {
@@ -34,6 +35,8 @@ export interface BonusResult {
   ms: number;
   /** 動了幾次（設定圖：移動小卡；配色：換顏色；名牌：移動字） */
   moves: number;
+  /** 設定圖急救這次的排法：分數是目前最好的話，OC 設定圖成品照這個排（T18） */
+  positions?: SheetPositions;
 }
 
 export interface Actions {
@@ -73,6 +76,10 @@ export interface Actions {
   finishDrawing(reason: DrawEndReason): Promise<boolean>;
   /** 畫圖時間到了還沒結束的話（例如時間到的時候網頁沒開著），幫它結束 */
   settleDrawing(): Promise<boolean>;
+  /** 打開 OC 設定圖成品（T18） */
+  noteSheetOpened(): Promise<void>;
+  /** 把 OC 設定圖存成圖片：method 是分享（手機）或下載（電腦） */
+  noteSheetSaved(method: 'share' | 'download'): Promise<void>;
 }
 
 /** 結束畫圖的原因：提早結束、時間到、開始任務（同時只算一個） */
@@ -208,7 +215,10 @@ export function createActions(kv: KV, store: GuildStore, clock: () => number = D
 
     async finishBonus(cId, game, r) {
       const now = clock();
-      const { after } = await apply((s) => recordBonus(s, cId, r.score));
+      const { after } = await apply((s) => {
+        const next = recordBonus(s, cId, r.score);
+        return game === 'sheet' && r.positions ? recordSheetBest(next, r.positions, r.score, now) : next;
+      });
       const best = findCommission(after, cId).bonusBest ?? r.score;
       await log('bonus_finished', {
         commissionId: cId, data: { game, score: r.score, best, passed: [...r.passed], ms: r.ms, moves: r.moves },
@@ -252,6 +262,15 @@ export function createActions(kv: KV, store: GuildStore, clock: () => number = D
       const now = clock(), d = store.state.drawing;
       if (!d || drawPhase(d, now) !== 'timeUp') return false;
       return endDrawing('timeUp', now);
+    },
+
+    async noteSheetOpened() {
+      const s = store.state;
+      await log('sheet_opened', { data: { parts: charSheetData(s).parts, fromGame: !!s.oc.sheetBest } }, clock());
+    },
+
+    async noteSheetSaved(method) {
+      await log('sheet_saved', { data: { method } }, clock());
     },
   };
 }

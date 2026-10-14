@@ -45,6 +45,11 @@ export interface Commission {
   cellIndex: number;          // 佔設定卡該區的第幾格（0–2，滿了往下一輪）
 }
 
+/** 設定圖急救（T9）的小卡：名字、台詞、正面、側面、背面 */
+export type SheetCardId = 'name' | 'quote' | 'front' | 'side' | 'back';
+/** 每張小卡在 8×10 格線上的位置（左上角，第幾欄、第幾列，0 起算） */
+export type SheetPositions = Readonly<Record<SheetCardId, { readonly x: number; readonly y: number }>>;
+
 export interface OCProfile {
   name: string;
   sprite: string;             // 選的 AI 小人檔名（例：maid_1.png），或上傳圖的 id（upload:<id>）
@@ -54,6 +59,8 @@ export interface OCProfile {
   layoutPhotoId?: string;     // 版面（平面構成）
   sketchPhotoId?: string;     // 草稿（手繪基礎）
   quote?: string;             // OC 的台詞：設定圖急救的台詞卡，玩家自己寫（T9 加的，7.2 沒有）
+  /** 設定圖急救排得最好的那次（分數一樣留新的）：OC 設定圖成品照這個排（T18 加的，7.2 沒有） */
+  sheetBest?: { positions: SheetPositions; score: number; at: number };
 }
 
 /** 正在畫圖（T17，7.2 沒有）：跟任務一樣用時間戳算，重新整理也不會歸零 */
@@ -91,7 +98,9 @@ export type EventType =
   | 'bonus_finished'           // T9 加的：加分關按「完成排版」計分（7.2 沒有）
   | 'gallery_opened'           // T15 加的：打開公會作品集（7.2 沒有）
   | 'draw_started'             // T17 加的：開始畫圖（7.2 沒有）
-  | 'draw_finished';           // T17 加的：結束畫圖（提早結束、時間到、開始任務）（7.2 沒有）
+  | 'draw_finished'            // T17 加的：結束畫圖（提早結束、時間到、開始任務）（7.2 沒有）
+  | 'sheet_opened'             // T18 加的：打開 OC 設定圖成品（7.2 沒有）
+  | 'sheet_saved';             // T18 加的：把 OC 設定圖存成圖片（7.2 沒有）
 
 export interface LogEvent {
   t: number;

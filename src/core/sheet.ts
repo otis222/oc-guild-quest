@@ -2,12 +2,13 @@
 // 依對齊和留白給分。這裡只有規則（格線、小卡大小、吸附、計分），畫面在 src/ui/sheetGame.ts。
 // 座標用格子算：x 是第幾欄、y 是第幾列（0 起算），指的是小卡的左上角。
 import { clamp } from './math';
+import type { SheetCardId } from './types';
 
 /** 格線：8 欄 × 10 列（手機上一格大約 36px） */
 export const SHEET_COLS = 8;
 export const SHEET_ROWS = 10;
 
-export type SheetCardId = 'name' | 'quote' | 'front' | 'side' | 'back';
+export type { SheetCardId };
 /** 三視圖：正面、側面、背面 */
 export const VIEW_CARDS: readonly SheetCardId[] = ['front', 'side', 'back'];
 /** 文字：名字、台詞 */

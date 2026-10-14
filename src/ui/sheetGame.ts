@@ -4,6 +4,7 @@
 // 拖曳時跟著手指走，放開就吸到最近的格子；點一下是原地放進格線；也可以用方向鍵一次移一格。
 import type { BonusResult } from '../core/actions';
 import { bonusGrade, cleanQuote, QUOTE_MAX } from '../core/bonus';
+import { sheetPositions } from '../core/charSheet';
 import { courseInfo } from '../core/courses';
 import {
   CARD_SIZE, clampToSheet, looseCards, messyLayout, nudgeCard, scoreSheet, SHEET_CARDS, SHEET_COLS, SHEET_ROWS, SHEET_RULES,
@@ -284,7 +285,8 @@ export function openSheetGame(d: SheetGameDeps): void {
     busy = true; button.disabled = true; button.textContent = B.finishing;
     commitQuote();
     try {
-      const best = await d.finish({ score: score.score, passed: score.passed, ms: Date.now() - startedAt, moves });
+      const positions = sheetPositions(layout) ?? undefined;
+      const best = await d.finish({ score: score.score, passed: score.passed, ms: Date.now() - startedAt, moves, positions });
       setLocked(true);
       showResult(best);
     } catch (err) {

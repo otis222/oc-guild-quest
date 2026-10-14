@@ -98,6 +98,9 @@ function pauseOthers(s: GuildState, exceptLevelId: string, now: number): GuildSt
   return changed ? { ...s, commissions } : s;
 }
 
+/** 正在跑的任務全部先暫停（開始畫圖時，見 drawTime.ts）；都沒在跑就回傳原本的狀態 */
+export const pauseRunningLevels = (s: GuildState, now = Date.now()): GuildState => pauseOthers(s, '', now);
+
 const timedOnly = (level: Level): void => {
   if (level.kind !== 'timed') throw new Error('交件關要走交件流程');
 };

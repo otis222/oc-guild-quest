@@ -11,6 +11,7 @@ import type { SpriteManifest } from './core/manifest';
 import { cellOf, monthDay } from './core/ocCard';
 import { pickGuildMembers, reassignMembers, uploadedPhotoId, uploadSpriteRef } from './core/oc';
 import { createGuildState, currentWork, findCommission, findLevel, loadState, nextLevel, saveState } from './core/state';
+import { DRAW_PER_TASK_MIN, drawBankMs, drawPhase } from './core/drawTime';
 import { createFpsGuard } from './core/fpsGuard';
 import { galleryWorks } from './core/gallery';
 import { isResearchMode } from './core/research';
@@ -36,6 +37,7 @@ import { openBoard } from './ui/board';
 import { openChangeLook } from './ui/changeLook';
 import { COPY } from './ui/copy';
 import { showCreateOcCard, type SpriteChoice } from './ui/createOC';
+import { openDrawTimer } from './ui/drawTimer';
 import { openGallery } from './ui/gallery';
 import { createHud, showLoadingMessage, type Hud } from './ui/hud';
 import { openOcCard, type OcCardOptions } from './ui/ocCard';
@@ -249,7 +251,11 @@ function startGuild({ kv, manifest, store, lobby, player, look: initialLook, pla
   };
   const syncAmbient = (): void => { syncDusk(); syncPapers(); };
   store.subscribe(syncAmbient);
-  setInterval(syncAmbient, AMBIENT_CHECK_MS);
+  setInterval(() => {
+    syncAmbient();
+    // 畫圖時間到的時候計時畫面沒開著：在這裡結束（開著的話計時畫面自己會結束）
+    if (!drawOpen) actions.settleDrawing().catch(warn('畫圖時間沒結束成功'));
+  }, AMBIENT_CHECK_MS);
   syncAmbient();
 
   const showCard = (opts: OcCardOptions = {}): void => openOcCard({
@@ -263,7 +269,25 @@ function startGuild({ kv, manifest, store, lobby, player, look: initialLook, pla
     // 從設定卡放大看作業、打開作品集，關掉後都回到設定卡
     onViewWork: (c) => viewWork(c, COPY.viewer.work, { onClose: () => showCard() }),
     onOpenGallery: () => showGallery('card'),
+    onStartDrawing: () => { startDrawing().catch(warn('開始畫圖失敗')); },
+    onOpenDrawing: () => showDraw(),
   }, opts);
+
+  /** 畫圖計時（T17）：計時畫面開著的時候，畫圖時間到了由它來結束 */
+  let drawOpen = false;
+  function showDraw(): void {
+    drawOpen = true;
+    openDrawTimer({ store, actions, wakeLock, onClosed: () => { drawOpen = false; } });
+  }
+
+  /** 開始畫圖：存著的畫圖時間全部拿來倒數（正在跑的任務先暫停），主角跳一下 */
+  async function startDrawing(): Promise<void> {
+    if (await actions.startDrawing()) {
+      player.hop();
+      player.say(COPY.draw.speech);
+    }
+    if (store.state.drawing) showDraw();
+  }
 
   /** 放大看一張委託交的作業照片 */
   function viewWork(c: Commission, title: string, more: Pick<PhotoViewerOptions, 'action' | 'onClose'> = {}): void {
@@ -367,6 +391,8 @@ function startGuild({ kv, manifest, store, lobby, player, look: initialLook, pla
         next: !next ? undefined : next.kind === 'timed'
           ? { label: COPY.toast.nextTask(next.minutes), onClick: () => startTask(commission.id, next.id, 'toast') }
           : { label: COPY.toast.nextSubmit, onClick: () => showSubmit(commission.id) },
+        // 每完成一個任務存 5 分鐘畫圖時間（T17）
+        extra: COPY.draw.earned(DRAW_PER_TASK_MIN, drawBankMs(store.state)),
       });
     },
   });
@@ -447,6 +473,12 @@ function startGuild({ kv, manifest, store, lobby, player, look: initialLook, pla
       }, instant);
     },
     resumeIfRunning() {
+      // 畫圖中重新整理：回到畫圖計時（時間到了的話，計時畫面寫「用完了」並結束這次畫圖）
+      const drawing = store.state.drawing;
+      if (drawing) {
+        if (drawPhase(drawing, Date.now()) !== 'paused') showDraw();
+        return;
+      }
       const work = currentWork(store.state);
       if (work && timerPhase(work.level, Date.now()) !== 'paused') showTimer(work.commission.id, work.level.id);
     },

@@ -247,3 +247,66 @@ describe('交件與展品', () => {
     expect((await loadEvents(kv)).at(-1)).toMatchObject({ type: 'exhibit_opened', commissionId: cId, data: { slot: 0 } });
   });
 });
+
+describe('畫圖時間', () => {
+  /** 完成前 n 個任務（每個存 5 分鐘畫圖時間） */
+  async function finish(n: number) {
+    const ctx = await setup();
+    for (const l of ctx.levelIds.slice(0, n)) {
+      await ctx.actions.startLevel(ctx.cId, l);
+      await ctx.actions.completeLevel(ctx.cId, l);
+    }
+    return ctx;
+  }
+
+  it('沒有存時間：開始不了，不記事件', async () => {
+    const { actions, types } = await setup();
+    expect(await actions.startDrawing()).toBe(false);
+    expect(await types()).toEqual(['commission_created']);
+  });
+
+  it('開始記 draw_started（帶著拿出來多少）；提早結束記 draw_finished，沒用完的留著', async () => {
+    const { actions, store, kv, clock } = await finish(2);
+    expect(await actions.startDrawing()).toBe(true);
+    expect((await loadEvents(kv)).at(-1)).toMatchObject({ type: 'draw_started', data: { bankMs: 10 * MIN } });
+    clock.now += 2 * MIN;
+    expect(await actions.pauseDrawing()).toBe(true);
+    clock.now += 5 * MIN;
+    expect(await actions.resumeDrawing()).toBe(true);
+    clock.now += 1 * MIN;
+    expect(await actions.finishDrawing('early')).toBe(true);
+    expect((await loadEvents(kv)).at(-1)).toMatchObject({
+      type: 'draw_finished', data: { reason: 'early', usedMs: 3 * MIN, plannedMs: 10 * MIN, pauses: 1 },
+    });
+    expect(store.state.drawing).toBeUndefined();
+    expect((await loadState(kv))!.drawUsedMs).toBe(3 * MIN);
+    expect(await actions.finishDrawing('early')).toBe(false);
+  });
+
+  it('開始畫圖時正在跑的任務先暫停（記成自動暫停）；開始任務時結束畫圖', async () => {
+    const { actions, cId, levelIds, store, kv, clock } = await finish(1);
+    await actions.startLevel(cId, levelIds[1]);
+    clock.now += MIN;
+    await actions.startDrawing();
+    let events = await loadEvents(kv);
+    expect(events.slice(-2).map((e) => e.type)).toEqual(['level_paused', 'draw_started']);
+    expect(events.at(-2)).toMatchObject({ levelId: levelIds[1], data: { auto: true } });
+    clock.now += 2 * MIN;
+    await actions.resumeLevel(cId, levelIds[1]);
+    events = await loadEvents(kv);
+    expect(events.slice(-2).map((e) => e.type)).toEqual(['level_resumed', 'draw_finished']);
+    expect(events.at(-1)?.data).toMatchObject({ reason: 'task', usedMs: 2 * MIN });
+    expect(store.state.drawing).toBeUndefined();
+  });
+
+  it('時間到還沒結束：settleDrawing 幫它結束，只扣拿出來的那些', async () => {
+    const { actions, store, kv, clock } = await finish(1);
+    await actions.startDrawing();
+    clock.now += 4 * MIN;
+    expect(await actions.settleDrawing()).toBe(false);
+    clock.now += 60 * MIN;
+    expect(await actions.settleDrawing()).toBe(true);
+    expect((await loadEvents(kv)).at(-1)).toMatchObject({ type: 'draw_finished', data: { reason: 'timeUp', usedMs: 5 * MIN } });
+    expect(store.state.drawUsedMs).toBe(5 * MIN);
+  });
+});

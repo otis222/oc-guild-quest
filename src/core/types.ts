@@ -56,6 +56,19 @@ export interface OCProfile {
   quote?: string;             // OC 的台詞：設定圖急救的台詞卡，玩家自己寫（T9 加的，7.2 沒有）
 }
 
+/** 正在畫圖（T17，7.2 沒有）：跟任務一樣用時間戳算，重新整理也不會歸零 */
+export interface DrawSession {
+  startedAt: number;
+  /** 這次可以畫多久：開始時存著的畫圖時間全部拿出來 */
+  plannedMs: number;
+  /** 累計休息 */
+  pausedMs: number;
+  /** 正在休息的話，從什麼時候開始 */
+  pausedAt?: number;
+  /** 休息了幾次 */
+  pauses: number;
+}
+
 export interface GuildState {
   version: 2;
   createdAt: number;
@@ -64,6 +77,8 @@ export interface GuildState {
   guildLevel: number;
   exhibits: string[];         // 展品照片 id，最近 5 張；第 i 張放在第 i 個展品位置（submit.ts、scene/exhibits.ts）
   customCourses: CustomCourse[]; // 自訂課程，照建立順序（第 2 版加的）
+  drawUsedMs?: number;        // 已經用掉的畫圖時間（T17 加的，7.2 沒有；存了多少用算的，見 drawTime.ts）
+  drawing?: DrawSession;      // 正在畫圖（T17 加的，7.2 沒有）
 }
 
 export type EventType =
@@ -74,7 +89,9 @@ export type EventType =
   | 'course_created'           // 接委託時新增自訂課程（7.2 沒有）
   | 'bonus_started'            // T9 加的：開始一局加分關（設定圖急救）（7.2 沒有）
   | 'bonus_finished'           // T9 加的：加分關按「完成排版」計分（7.2 沒有）
-  | 'gallery_opened';          // T15 加的：打開公會作品集（7.2 沒有）
+  | 'gallery_opened'           // T15 加的：打開公會作品集（7.2 沒有）
+  | 'draw_started'             // T17 加的：開始畫圖（7.2 沒有）
+  | 'draw_finished';           // T17 加的：結束畫圖（提早結束、時間到、開始任務）（7.2 沒有）
 
 export interface LogEvent {
   t: number;

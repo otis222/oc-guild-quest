@@ -2,6 +2,7 @@
 // 事件只在狀態真的有變時才記：連按兩次「完成」、或兩個分頁都按，也只記一次、只點亮一片。
 import { recordBonus, setOcQuote, type BonusGame } from './bonus';
 import { courseInfo } from './courses';
+import { drawElapsedMs, drawPhase, finishDrawing, pauseDrawing, resumeDrawing, startDrawing } from './drawTime';
 import { logEvent, type EventFields } from './events';
 import { newId } from './id';
 import {
@@ -63,7 +64,19 @@ export interface Actions {
   setOcQuote(quote: string): Promise<boolean>;
   /** 打開公會作品集（T15）：via 是從哪裡打開的（card：設定卡、exhibit：大廳展品），count 是有幾件作品 */
   noteGalleryOpened(via: string, count: number): Promise<void>;
+  /** 開始畫圖（T17）：存著的畫圖時間全部拿來倒數，正在跑的任務先暫停；回傳有沒有開始 */
+  startDrawing(): Promise<boolean>;
+  /** 畫圖休息一下、繼續畫圖；回傳有沒有變 */
+  pauseDrawing(): Promise<boolean>;
+  resumeDrawing(): Promise<boolean>;
+  /** 結束畫圖：畫了多久扣多久，沒用完的留著；reason 記在事件裡 */
+  finishDrawing(reason: DrawEndReason): Promise<boolean>;
+  /** 畫圖時間到了還沒結束的話（例如時間到的時候網頁沒開著），幫它結束 */
+  settleDrawing(): Promise<boolean>;
 }
+
+/** 結束畫圖的原因：提早結束、時間到、開始任務（同時只算一個） */
+export type DrawEndReason = 'early' | 'timeUp' | 'task';
 
 type LevelOp = (s: GuildState, commissionId: string, levelId: string, now: number) => GuildState;
 
@@ -104,6 +117,15 @@ export function createActions(kv: KV, store: GuildStore, clock: () => number = D
 
   const ids = (commissionId: string, levelId: string): EventFields => ({ commissionId, levelId });
 
+  /** 結束畫圖並記 draw_finished；沒在畫就什麼都不做 */
+  async function endDrawing(reason: DrawEndReason, now: number): Promise<boolean> {
+    const { before, after } = await apply((s) => finishDrawing(s, now));
+    const d = before.drawing;
+    if (before === after || !d) return false;
+    await log('draw_finished', { data: { reason, usedMs: drawElapsedMs(d, now), plannedMs: d.plannedMs, pauses: d.pauses } }, now);
+    return true;
+  }
+
   return {
     async createCommission(draft) {
       const now = clock(), id = newId(now);
@@ -119,6 +141,7 @@ export function createActions(kv: KV, store: GuildStore, clock: () => number = D
     startLevel: (cId, lId, via) => levelAction(startLevel, cId, lId, async (_old, next, now, before, after) => {
       await logAutoPaused(before, after, lId, now);
       await log('level_started', { ...ids(cId, lId), data: { minutes: next.minutes, ...(via ? { via } : {}) } }, now);
+      if (after.drawing) await endDrawing('task', now);
     }),
 
     pauseLevel: (cId, lId) => levelAction(pauseLevel, cId, lId, async (_old, _next, now) => {
@@ -128,6 +151,7 @@ export function createActions(kv: KV, store: GuildStore, clock: () => number = D
     resumeLevel: (cId, lId) => levelAction(resumeLevel, cId, lId, async (old, _next, now, before, after) => {
       await logAutoPaused(before, after, lId, now);
       await log('level_resumed', { ...ids(cId, lId), data: { pausedForMs: Math.max(0, now - (old.pausedAt ?? now)) } }, now);
+      if (after.drawing) await endDrawing('task', now);
     }),
 
     extendLevel: (cId, lId) => levelAction(extendLevel, cId, lId, async (old, _next, now) => {
@@ -199,6 +223,35 @@ export function createActions(kv: KV, store: GuildStore, clock: () => number = D
 
     async noteGalleryOpened(via, count) {
       await log('gallery_opened', { data: { via, count } }, clock());
+    },
+
+    async startDrawing() {
+      const now = clock();
+      const { before, after } = await apply((s) => startDrawing(s, now));
+      if (before === after || !after.drawing) return false;
+      await logAutoPaused(before, after, '', now);
+      await log('draw_started', { data: { bankMs: after.drawing.plannedMs } }, now);
+      return true;
+    },
+
+    async pauseDrawing() {
+      const now = clock();
+      const { before, after } = await apply((s) => pauseDrawing(s, now));
+      return before !== after;
+    },
+
+    async resumeDrawing() {
+      const now = clock();
+      const { before, after } = await apply((s) => resumeDrawing(s, now));
+      return before !== after;
+    },
+
+    finishDrawing: (reason) => endDrawing(reason, clock()),
+
+    async settleDrawing() {
+      const now = clock(), d = store.state.drawing;
+      if (!d || drawPhase(d, now) !== 'timeUp') return false;
+      return endDrawing('timeUp', now);
     },
   };
 }

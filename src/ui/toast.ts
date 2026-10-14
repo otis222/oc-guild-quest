@@ -20,6 +20,8 @@ export interface CardToastOptions {
   onOpen(): void;
   /** 接著做的事（下一個任務、交件）：多一顆按鈕 */
   next?: { label: string; onClick(): void };
+  /** 多一行小字（完成任務存到的畫圖時間，T17） */
+  extra?: string;
 }
 
 /** 多久後自己收起來；有「下一個任務」時留久一點，讓人來得及按 */
@@ -37,7 +39,8 @@ export function showCardToast(o: CardToastOptions): void {
     el('div', { class: 'toast-pie' }, pie),
     el('div', { class: 'toast-text' },
       el('div', { class: 'toast-title' }, o.title),
-      el('div', { class: 'toast-sub' }, o.detail)),
+      el('div', { class: 'toast-sub' }, o.detail),
+      o.extra ? el('div', { class: 'toast-extra' }, o.extra) : null),
     next ? el('div', { class: 'toast-actions' }, open, next) : open);
 
   let closed = false;

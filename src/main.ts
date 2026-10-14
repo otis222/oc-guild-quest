@@ -92,9 +92,9 @@ async function main(): Promise<void> {
   const input = new Input(vp, rig, (x, y) => {
     const hit = lobby.pickAt(x, y);
     if (hit) {
-      // 做任務中點主角：回到計時畫面
+      // 做任務中點主角：回到計時畫面；平常點主角，有台詞就說自己的台詞（T11）
       if (guild && hit === lobby.player && lobby.working) guild.openCurrentTask();
-      else lobby.poke(hit);
+      else lobby.poke(hit, hit === lobby.player ? guild?.playerLine() : undefined);
       return;
     }
     if (guild && rig.hits(x, y, board.targets)) { guild.openBoard(); return; }
@@ -173,6 +173,8 @@ interface Guild {
   openCard(): void;
   /** 打開正在做的任務的計時畫面 */
   openCurrentTask(): void;
+  /** 點主角時說的話：OC 的台詞（在設定圖急救寫的）；沒寫過是 undefined */
+  playerLine(): string | undefined;
   /** 點大廳第 slot 座展台的展品：放大看 */
   openExhibit(slot: number): void;
   /** 每幀：主角要不要站在委託板前、頭上的進度環。instant：直接站過去（剛載入時） */
@@ -365,6 +367,7 @@ function startGuild({ kv, manifest, store, lobby, player, look: initialLook, pla
       const work = currentWork(store.state);
       if (work) showTimer(work.commission.id, work.level.id);
     },
+    playerLine: () => store.state.oc.quote,
     syncWork(instant = false) {
       const work = currentWork(store.state);
       if (!work) { lobby.setWork(null); return; }

@@ -122,6 +122,9 @@ export const COPY = {
     submittedDetail: (work: string, level: number) => `公會等級 ${level}・${work}`,
     /** 企劃表 7.7 的按鈕範例 */
     open: '看 OC 設定卡',
+    /** 完成任務後直接接下一關（T10） */
+    nextTask: (minutes: number) => `下一個任務（${minutes} 分鐘）`,
+    nextSubmit: '交件',
   },
 
   /** 交件 */

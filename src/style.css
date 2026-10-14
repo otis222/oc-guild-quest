@@ -240,6 +240,13 @@ button:disabled:hover { background: var(--panel); }
 .toast-title { font-size: 14px; font-weight: 800; }
 .toast-sub { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: 12px; font-weight: 700; color: var(--ink-soft); }
 .toast .toast-open { flex: 0 0 auto; padding: 8px 10px; font-size: 13px; box-shadow: none; background: #fff; }
+/* 有「下一個任務」時：按鈕放第二排，「下一個任務」用掉剩下的寬度，一行放得下 */
+.toast.has-next { flex-wrap: wrap; }
+.toast-actions { flex: 1 0 100%; display: grid; grid-template-columns: auto minmax(0, 1fr); gap: 8px; }
+.toast .toast-next {
+  padding: 8px 10px; font-size: 13px; font-weight: 700; white-space: nowrap; box-shadow: none;
+  color: #fff; background: var(--accent); border-color: transparent;
+}
 
 /* 交件後格子中間的作業成果 */
 .pie-swatch { stroke: #fff; stroke-width: 1.5; }

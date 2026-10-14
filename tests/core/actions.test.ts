@@ -80,6 +80,12 @@ describe('委託與任務的操作', () => {
     expect((await types()).filter((t) => t === 'level_completed')).toHaveLength(1);
   });
 
+  it('從小提示的「下一個任務」開始：level_started 記下 via', async () => {
+    const { actions, cId, levelIds, kv } = await setup();
+    await actions.startLevel(cId, levelIds[0], 'toast');
+    expect((await loadEvents(kv)).at(-1)).toMatchObject({ type: 'level_started', data: { minutes: 10, via: 'toast' } });
+  });
+
   it('時間到之後按再 5 分鐘：記 level_extended，標記是時間到之後', async () => {
     const { actions, cId, levelIds, clock, kv } = await setup();
     await actions.startLevel(cId, levelIds[0]);

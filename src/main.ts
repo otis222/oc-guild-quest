@@ -9,7 +9,7 @@ import { logEvent } from './core/events';
 import type { SpriteManifest } from './core/manifest';
 import { cellOf, monthDay } from './core/ocCard';
 import { pickGuildMembers, reassignMembers, uploadedPhotoId, uploadSpriteRef } from './core/oc';
-import { createGuildState, currentWork, findCommission, findLevel, loadState, saveState } from './core/state';
+import { createGuildState, currentWork, findCommission, findLevel, loadState, nextLevel, saveState } from './core/state';
 import { createFpsGuard } from './core/fpsGuard';
 import { isResearchMode } from './core/research';
 import { deletePhoto, getPhoto, idbKV, putPhoto, requestPersistence, type KV } from './core/storage';
@@ -294,11 +294,13 @@ function startGuild({ kv, manifest, store, lobby, player, look: initialLook, pla
 
   const showTimer = (commissionId: string, levelId: string): void => openTimer({
     store, actions, wakeLock, commissionId, levelId,
-    // 完成一個任務：主角跳一下說話，大廳下面浮出小提示（迷你設定格點亮那一片），按了才打開 OC 設定卡
+    // 完成一個任務：主角跳一下說話，大廳下面浮出小提示（迷你設定格點亮那一片），按了才打開 OC 設定卡。
+    // 還有下一關的話，小提示上直接有「下一個任務」或「交件」（T10）
     onCompleted: (commission, level) => {
       player.hop();
       player.say(COPY.speech.taskDone);
       const course = courseInfo(store.state, commission.course), cell = cellOf(commission);
+      const next = nextLevel(commission);
       showCardToast({
         cell, course, levelId: level.id,
         title: COPY.toast.lit, detail: COPY.toast.detail(course.label, commission.title, cell.lit, cell.slices.length),
@@ -306,21 +308,27 @@ function startGuild({ kv, manifest, store, lobby, player, look: initialLook, pla
           void actions.noteOcCardOpened('toast');
           showCard({ highlight: { commissionId: commission.id, levelId: level.id } });
         },
+        next: !next ? undefined : next.kind === 'timed'
+          ? { label: COPY.toast.nextTask(next.minutes), onClick: () => startTask(commission.id, next.id, 'toast') }
+          : { label: COPY.toast.nextSubmit, onClick: () => showSubmit(commission.id) },
       });
     },
   });
 
-  /** 開始任務（還沒開始的話）並打開計時畫面 */
-  async function openTask(commissionId: string, levelId: string): Promise<void> {
-    if (findLevel(store.state, commissionId, levelId).level.status === 'todo') await actions.startLevel(commissionId, levelId);
+  /** 開始任務（還沒開始的話）並打開計時畫面；via 是從哪裡開始的（記在事件裡） */
+  async function openTask(commissionId: string, levelId: string, via: string): Promise<void> {
+    if (findLevel(store.state, commissionId, levelId).level.status === 'todo') await actions.startLevel(commissionId, levelId, via);
     showTimer(commissionId, levelId);
   }
+  const startTask = (commissionId: string, levelId: string, via: string): void => {
+    openTask(commissionId, levelId, via).catch((err: unknown) => console.error('開始任務失敗', err));
+  };
 
   function showBoard(): void {
     openBoard({
       store,
       createCommission: (draft) => actions.createCommission(draft),
-      openTask: (cId, lId) => { openTask(cId, lId).catch((err: unknown) => console.error('開始任務失敗', err)); },
+      openTask: (cId, lId) => startTask(cId, lId, 'board'),
       openSubmit: showSubmit,
       openBonus: showBonus,
     });

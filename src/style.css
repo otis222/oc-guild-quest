@@ -481,6 +481,34 @@ body:has(.timer-layer) .toast { visibility: hidden; }
 .cs-note { margin-top: 6px; text-align: center; }
 .cs-msg { text-align: center; }
 
+/* 專屬小人（T19）：選 OC 圖、領取碼、領到的小人 */
+.chibi-intro { margin: 0 0 6px; font-size: 14px; line-height: 1.6; }
+.chibi-privacy { margin-bottom: 12px; }
+.chibi-pickrow { display: flex; align-items: center; gap: 12px; margin-bottom: 12px; }
+.chibi-preview {
+  flex: 0 0 auto; width: 96px; height: 96px; display: grid; place-items: center; overflow: hidden;
+  border-radius: 12px; border: 1px solid var(--panel-line); background: #f5f2f8; font-size: 12px; color: var(--ink-soft);
+}
+.chibi-preview.is-empty { border-style: dashed; border-color: rgba(47, 37, 66, 0.3); }
+.chibi-preview img { max-width: 100%; max-height: 100%; object-fit: contain; }
+.chibi-pick {
+  display: inline-block; padding: 9px 16px; border-radius: 999px; border: 1px solid var(--panel-line);
+  background: #fff; font-size: 14px; font-weight: 700; cursor: pointer;
+}
+#chibiFile:focus-visible + .chibi-pick { outline: 2px solid var(--accent); outline-offset: 2px; }
+.chibi-code {
+  display: flex; align-items: baseline; flex-wrap: wrap; gap: 4px 12px; margin: 10px 0 6px; padding: 12px 14px;
+  border-radius: 12px; background: var(--accent-soft);
+}
+.chibi-code span { font-size: 13px; font-weight: 700; color: var(--ink-soft); }
+.chibi-code strong { font-size: 26px; font-weight: 800; letter-spacing: 0.08em; -webkit-user-select: text; user-select: text; }
+.chibi-result {
+  display: grid; place-items: end center; height: 220px; margin: 8px 0; overflow: hidden; border-radius: 12px;
+  border: 1px solid var(--panel-line); background: linear-gradient(#fff, var(--accent-soft));
+}
+.chibi-result img { max-width: 100%; max-height: 208px; object-fit: contain; }
+.chibi .form-actions { margin-top: 10px; }
+
 /* 公會作品集（T15）：兩欄的照片格子 */
 .gallery { list-style: none; margin: 0; padding: 0; display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 14px 10px; }
 .gallery li { min-width: 0; }

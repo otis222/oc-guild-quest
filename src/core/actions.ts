@@ -2,6 +2,7 @@
 // 事件只在狀態真的有變時才記：連按兩次「完成」、或兩個分頁都按，也只記一次、只點亮一片。
 import { recordBonus, setOcQuote, type BonusGame } from './bonus';
 import { charSheetData, recordSheetBest } from './charSheet';
+import { receiveChibi, requestChibi } from './chibi';
 import { courseInfo } from './courses';
 import { drawElapsedMs, drawPhase, finishDrawing, pauseDrawing, resumeDrawing, startDrawing } from './drawTime';
 import { logEvent, type EventFields } from './events';
@@ -80,6 +81,10 @@ export interface Actions {
   noteSheetOpened(): Promise<void>;
   /** 把 OC 設定圖存成圖片：method 是分享（手機）或下載（電腦） */
   noteSheetSaved(method: 'share' | 'download'): Promise<void>;
+  /** 專屬小人（T19）：OC 圖送出了，記下領取碼；bytes 是送出的圖有多大 */
+  requestChibi(code: string, bytes: number): Promise<void>;
+  /** 專屬小人領到了：記下小人圖；回傳被換掉的舊小人圖（要刪掉），領取碼對不上就回傳 false */
+  receiveChibi(code: string, photoId: string): Promise<{ replaced?: string } | false>;
 }
 
 /** 結束畫圖的原因：提早結束、時間到、開始任務（同時只算一個） */
@@ -271,6 +276,25 @@ export function createActions(kv: KV, store: GuildStore, clock: () => number = D
 
     async noteSheetSaved(method) {
       await log('sheet_saved', { data: { method } }, clock());
+    },
+
+    async requestChibi(code, bytes) {
+      const now = clock();
+      await apply((s) => requestChibi(s, code, now));
+      await log('chibi_requested', { data: { code, bytes } }, now);
+    },
+
+    async receiveChibi(code, photoId) {
+      const now = clock();
+      let replaced: string | undefined;
+      const { before, after } = await apply((s) => {
+        const r = receiveChibi(s, code, photoId, now);
+        replaced = r.replaced;
+        return r.state;
+      });
+      if (before === after) return false;
+      await log('chibi_received', { data: { code } }, now);
+      return replaced ? { replaced } : {};
     },
   };
 }

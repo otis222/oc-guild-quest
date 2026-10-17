@@ -3,6 +3,7 @@
 // 一格是一張委託（見 pie.ts）。
 // 點任何一片，看得到是哪一天、哪張委託的哪個任務；交件的格子中間是作業成果，點了放大看照片。
 // 從大廳小提示打開時，剛完成的那一片（交件的話是整格）播點亮動畫（0.8 秒內）。
+import { chibiProgress } from '../core/chibi';
 import { drawBankMs } from '../core/drawTime';
 import { galleryWorks } from '../core/gallery';
 import { buildOcCard, type CardSection } from '../core/ocCard';
@@ -30,6 +31,8 @@ export interface OcCardDeps {
   onOpenDrawing(): void;
   /** 按「看設定圖」（T18） */
   onOpenSheet(): void;
+  /** 打開專屬小人（T19）；沒設定收件處就沒有這條 */
+  onOpenChibi?(): void;
   /** 點交件的作業（格子中間、部件格）：放大看照片 */
   onViewWork(commission: Commission): void;
 }
@@ -84,7 +87,8 @@ function show(deps: OcCardDeps, opts: OcCardOptions): void {
           on(el('button', { type: 'button', class: 'oc-gallery' }, COPY.gallery.open(galleryWorks(s).length)), 'click', () => deps.onOpenGallery()))));
     const sections = card.sections.map((sec) => sectionView(sec, deps, first ? opts.highlight : undefined));
     const sheet = on(el('button', { type: 'button', class: 'oc-sheet' }, COPY.charSheet.open), 'click', () => deps.onOpenSheet());
-    dialog.body.replaceChildren(head, partsRow(s, deps), sheet, drawRow(s, deps), ...sections.map((x) => x.element));
+    const chibi = chibiRow(s, deps);
+    dialog.body.replaceChildren(head, partsRow(s, deps), sheet, drawRow(s, deps), ...(chibi ? [chibi] : []), ...sections.map((x) => x.element));
     // 捲到剛點亮的那一區，連下面那行說明一起看得到（自訂課程的區在最下面）
     if (first) sections.find((x) => x.highlighted)?.element.scrollIntoView({ block: 'nearest' });
   }
@@ -115,6 +119,18 @@ function drawRow(s: GuildState, deps: OcCardDeps): HTMLElement {
   if (!bank) return el('div', { class: 'oc-draw is-empty' }, text(D.none));
   return el('div', { class: 'oc-draw' }, text(D.bank(bank)),
     on(el('button', { type: 'button' }, D.start), 'click', () => deps.onStartDrawing()));
+}
+
+/** 專屬小人（T19）：還差幾個任務解鎖、訂一隻、組員製作中、收到了 */
+function chibiRow(s: GuildState, deps: OcCardDeps): HTMLElement | null {
+  const open = deps.onOpenChibi;
+  if (!open) return null;
+  const K = COPY.chibi;
+  const text = (detail: string): HTMLElement => el('span', { class: 'oc-draw-text' }, el('strong', {}, K.title), detail);
+  const c = s.chibi, p = chibiProgress(s);
+  if (!c && !p.unlocked) return el('div', { class: 'oc-draw oc-chibi is-empty' }, text(K.locked(p.left)));
+  const [detail, label] = c?.request ? [K.rowWaiting, K.check] : c?.photoId ? [K.rowReceived, K.view] : [K.rowOpen, K.order];
+  return el('div', { class: 'oc-draw oc-chibi' }, text(detail), on(el('button', { type: 'button' }, label), 'click', () => open()));
 }
 
 function partThumb(part: PartType, c: Commission, deps: OcCardDeps): HTMLElement {

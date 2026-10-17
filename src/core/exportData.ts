@@ -29,6 +29,8 @@ export const EVENT_LABELS: Readonly<Record<EventType, string>> = {
   draw_finished: '結束畫圖',
   sheet_opened: '看設定圖',
   sheet_saved: '存設定圖',
+  chibi_requested: '訂專屬小人',
+  chibi_received: '領到專屬小人',
 };
 
 const pad = (n: number): string => String(n).padStart(2, '0');

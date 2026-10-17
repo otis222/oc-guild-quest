@@ -7,6 +7,7 @@
 **網址：https://otis222.github.io/oc-guild-quest/**　手機直接打開就能玩。
 
 - 不用帳號。進度、作業照片和 OC 圖只存在你自己的瀏覽器（IndexedDB），不會上傳到任何地方。
+  - 例外：「專屬小人」裡你按「送出」的那一張 OC 圖，會傳到組員的 Google 雲端硬碟，讓組員用自己的電腦做成小人；你領回小人後，雲端上的檔案會刪掉。
 - 換手機、換瀏覽器或清除網站資料，進度就不見了。
 - 需要支援 WebGL2 的瀏覽器（新版的 Chrome、Safari、Edge）。
 
@@ -31,4 +32,5 @@ push 到 `main` 以後，GitHub Actions（`.github/workflows/deploy.yml`）會�
 - `docs/企劃表.md`：企劃、任務卡、規格
 - `docs/進度紀錄.md`：每張任務卡做了什麼、怎麼驗收、需要人確認的
 - `docs/對映表.md`：紙原型和網頁原型的對照
+- `docs/專屬小人設定.md`：專屬小人的收件處怎麼部署、組員怎麼用 ComfyUI 做小人
 - `CLAUDE.md`：給 Claude Code 的工作說明

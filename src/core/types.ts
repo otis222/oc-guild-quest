@@ -76,6 +76,15 @@ export interface DrawSession {
   pauses: number;
 }
 
+/** 專屬小人（T19，7.2 沒有）：送給組員做的 OC 小人 */
+export interface ChibiState {
+  /** 送出了、還沒領到：領取碼和送出的時間 */
+  request?: { code: string; requestedAt: number };
+  /** 最近一次領到的小人圖（photo id）；換造型換掉以後還可以再換回來 */
+  photoId?: string;
+  receivedAt?: number;
+}
+
 export interface GuildState {
   version: 2;
   createdAt: number;
@@ -86,6 +95,7 @@ export interface GuildState {
   customCourses: CustomCourse[]; // 自訂課程，照建立順序（第 2 版加的）
   drawUsedMs?: number;        // 已經用掉的畫圖時間（T17 加的，7.2 沒有；存了多少用算的，見 drawTime.ts）
   drawing?: DrawSession;      // 正在畫圖（T17 加的，7.2 沒有）
+  chibi?: ChibiState;         // 專屬小人（T19 加的，7.2 沒有）
 }
 
 export type EventType =
@@ -100,7 +110,9 @@ export type EventType =
   | 'draw_started'             // T17 加的：開始畫圖（7.2 沒有）
   | 'draw_finished'            // T17 加的：結束畫圖（提早結束、時間到、開始任務）（7.2 沒有）
   | 'sheet_opened'             // T18 加的：打開 OC 設定圖成品（7.2 沒有）
-  | 'sheet_saved';             // T18 加的：把 OC 設定圖存成圖片（7.2 沒有）
+  | 'sheet_saved'              // T18 加的：把 OC 設定圖存成圖片（7.2 沒有）
+  | 'chibi_requested'          // T19 加的：把 OC 圖送給組員做專屬小人（7.2 沒有）
+  | 'chibi_received';          // T19 加的：領到專屬小人（7.2 沒有）
 
 export interface LogEvent {
   t: number;

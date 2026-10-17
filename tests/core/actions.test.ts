@@ -330,3 +330,18 @@ describe('畫圖時間', () => {
     expect(store.state.drawUsedMs).toBe(5 * MIN);
   });
 });
+
+describe('專屬小人', () => {
+  it('送出記 chibi_requested；領到記 chibi_received，回傳要刪掉的舊小人圖', async () => {
+    const { actions, store, kv } = await setup();
+    await actions.requestChibi('K7Q2-M9X', 123_456);
+    expect(store.state.chibi?.request?.code).toBe('K7Q2-M9X');
+    expect((await loadEvents(kv)).at(-1)).toMatchObject({ type: 'chibi_requested', data: { code: 'K7Q2-M9X', bytes: 123_456 } });
+    expect(await actions.receiveChibi('ABCD-EFG', 'p0')).toBe(false);
+    expect(await actions.receiveChibi('K7Q2-M9X', 'p1')).toEqual({});
+    expect((await loadEvents(kv)).at(-1)).toMatchObject({ type: 'chibi_received', data: { code: 'K7Q2-M9X' } });
+    expect((await loadState(kv))!.chibi).toMatchObject({ photoId: 'p1' });
+    await actions.requestChibi('ABCD-EFG', 1);
+    expect(await actions.receiveChibi('ABCD-EFG', 'p2')).toEqual({ replaced: 'p1' });
+  });
+});

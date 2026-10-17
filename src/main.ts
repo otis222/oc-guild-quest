@@ -38,6 +38,8 @@ import { openChangeLook } from './ui/changeLook';
 import { COPY } from './ui/copy';
 import { showCreateOcCard, type SpriteChoice } from './ui/createOC';
 import { openCharSheet } from './ui/charSheet';
+import { openChibi } from './ui/chibi';
+import { CHIBI_ENDPOINT } from './ui/chibiClient';
 import { openDrawTimer } from './ui/drawTimer';
 import { openGallery } from './ui/gallery';
 import { createHud, showLoadingMessage, type Hud } from './ui/hud';
@@ -259,6 +261,7 @@ function startGuild({ kv, manifest, store, lobby, player, look: initialLook, pla
   }, AMBIENT_CHECK_MS);
   syncAmbient();
 
+  const chibiEndpoint = CHIBI_ENDPOINT;
   const showCard = (opts: OcCardOptions = {}): void => openOcCard({
     store, photos,
     ocImage: () => look.url,
@@ -273,7 +276,30 @@ function startGuild({ kv, manifest, store, lobby, player, look: initialLook, pla
     onStartDrawing: () => { startDrawing().catch(warn('開始畫圖失敗')); },
     onOpenDrawing: () => showDraw(),
     onOpenSheet: () => showCharSheet(),
+    // 有設定收件處（VITE_CHIBI_ENDPOINT）才有專屬小人
+    onOpenChibi: chibiEndpoint ? () => showChibi(chibiEndpoint) : undefined,
   }, opts);
+
+  /** 專屬小人（T19）：OC 圖送到組員的收件處，組員用 ComfyUI 做好後領回來換上；關掉回到設定卡 */
+  function showChibi(endpoint: string): void {
+    openChibi({
+      store, endpoint, photos,
+      requested: (code, bytes) => actions.requestChibi(code, bytes),
+      async received(code, sprite) {
+        const id = await putPhoto(kv, sprite);
+        const r = await actions.receiveChibi(code, id);
+        if (!r) {
+          await deletePhoto(kv, id).catch(warn('刪除多存的小人圖失敗'));
+          return false;
+        }
+        photos.remember(id, sprite);
+        if (r.replaced) await deletePhoto(kv, r.replaced).catch(warn('刪除舊的專屬小人失敗'));
+        return true;
+      },
+      apply: (sprite) => changeLook({ kind: 'upload', blob: sprite }),
+      onClosed: () => showCard(),
+    });
+  }
 
   /** OC 設定圖成品（T18）：從設定卡打開，關掉回到設定卡 */
   function showCharSheet(): void {

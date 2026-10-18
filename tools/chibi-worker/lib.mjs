@@ -29,7 +29,15 @@ export const DEFAULTS = {
   pollSeconds: 30,
   timeoutMinutes: 20,
 };
-const KNOWN = ['inboxUrl', 'workerKey', 'comfyUrl', 'workflow', 'imageNode', 'outputNode', 'review', 'candidates', 'pollSeconds', 'timeoutMinutes'];
+const KNOWN = [
+  'inboxUrl', 'workerKey', 'comfyUrl', 'comfyStart', 'workflow', 'imageNode', 'outputNode',
+  'review', 'candidates', 'pollSeconds', 'timeoutMinutes',
+];
+/** ComfyUI 常見的兩個網址：自己裝的、免安裝版用 8188，ComfyUI Desktop 用 8000 */
+export const OTHER_COMFY = {
+  'http://127.0.0.1:8188': 'http://127.0.0.1:8000',
+  'http://127.0.0.1:8000': 'http://127.0.0.1:8188',
+};
 
 /** 鑰匙用的字：32 個（一個位元組取 5 位元剛好平均），拿掉 l、o 這些容易看錯的 */
 const KEY_CHARS = 'abcdefghijkmnpqrstuvwxyz23456789';
@@ -37,14 +45,12 @@ const KEY_CHARS = 'abcdefghijkmnpqrstuvwxyz23456789';
 /** 新的鑰匙：bytes 是亂數（worker.mjs 用 crypto.randomBytes） */
 export const newKey = (bytes) => Array.from(bytes, (b) => KEY_CHARS[b & 31]).join('');
 
-/** 第一次執行時建立的 config.json */
+/** 第一次執行時建立的 config.json；模式和 ComfyUI 啟動檔留給設定時問 */
 export const starterConfig = (key) => ({
   inboxUrl: '',
   workerKey: key,
   comfyUrl: DEFAULTS.comfyUrl,
   workflow: DEFAULTS.workflow,
-  review: DEFAULTS.review,
-  candidates: DEFAULTS.candidates,
 });
 
 const str = (v) => (typeof v === 'string' ? v.trim() : '');
@@ -59,7 +65,26 @@ const httpUrl = (s) => {
 const isLocal = (u) => ['localhost', '127.0.0.1', '[::1]'].includes(u.hostname);
 const REGEN_KEY = '刪掉 config.json 再執行一次，程式會產生一組新的（Apps Script 的 WORKER_KEY 也要換成新的）';
 
-/** 檢查 config.json，補上預設值。inbox: false 是只試跑 ComfyUI（--try），收件處的網址和鑰匙還沒填也沒關係 */
+/** 收件處網址：對的話回傳整理好的網址（url），不對回傳原因（error） */
+export function checkInboxUrl(input) {
+  const s = str(input);
+  if (!s) return { error: '還沒貼上收件處的網址（部署 Apps Script 拿到的，/exec 結尾）' };
+  const u = httpUrl(s);
+  if (!u) return { error: `「${s}」不是網址` };
+  if (u.protocol !== 'https:' && !isLocal(u)) return { error: '收件處的網址要是 https:// 開頭' };
+  if (/\/dev\/?$/.test(u.pathname)) return { error: '要用 /exec 結尾的網址（「部署 → 管理部署作業」裡的那個）；/dev 的網址只有你自己登入時能用' };
+  return { url: u.href };
+}
+
+/** ComfyUI 的網址：沒寫 http:// 也可以；不是網址是 null */
+export function checkComfyUrl(input) {
+  const s = str(input);
+  if (!s) return null;
+  const u = httpUrl(/^[a-z][a-z0-9+.-]*:\/\//i.test(s) ? s : `http://${s}`);
+  return u ? `${u.origin}${u.pathname}`.replace(/\/+$/, '') : null;
+}
+
+/** 檢查 config.json，補上預設值。inbox: false 是收件處的網址和鑰匙還沒填也沒關係（--try、設定到一半） */
 export function parseConfig(raw, { inbox: needInbox = true } = {}) {
   const errors = [];
   const warnings = [];
@@ -67,25 +92,21 @@ export function parseConfig(raw, { inbox: needInbox = true } = {}) {
   for (const k of Object.keys(raw)) if (!KNOWN.includes(k)) warnings.push(`不認得的設定「${k}」，會被忽略（拼字對嗎？）`);
   const config = { ...DEFAULTS, inboxUrl: '', workerKey: '' };
 
-  if (needInbox) {
-    const inbox = str(raw.inboxUrl);
-    const inboxUrl = inbox ? httpUrl(inbox) : null;
-    if (!inbox) errors.push('inboxUrl 還沒填：貼上收件處的網址（部署 Apps Script 拿到的，/exec 結尾）');
-    else if (!inboxUrl) errors.push(`inboxUrl 不是網址：${inbox}`);
-    else if (inboxUrl.protocol !== 'https:' && !isLocal(inboxUrl)) errors.push('inboxUrl 要是 https:// 開頭');
-    else if (/\/dev\/?$/.test(inboxUrl.pathname)) errors.push('inboxUrl 要用 /exec 結尾的網址（「部署 → 管理部署作業」裡的那個）；/dev 的網址只有你自己登入時能用');
-    else config.inboxUrl = inboxUrl.href;
-
-    const key = str(raw.workerKey);
-    if (!key) errors.push(`workerKey 還沒填：${REGEN_KEY}`);
-    else if (key.length < KEY_MIN) errors.push(`workerKey 太短（至少 ${KEY_MIN} 個字）：${REGEN_KEY}`);
-    else config.workerKey = key;
-  }
+  const inbox = checkInboxUrl(raw.inboxUrl);
+  if (inbox.url) config.inboxUrl = inbox.url;
+  else if (needInbox) errors.push(`inboxUrl：${inbox.error}`);
+  const key = str(raw.workerKey);
+  if (key.length >= KEY_MIN) config.workerKey = key;
+  else if (needInbox) errors.push(key ? `workerKey 太短（至少 ${KEY_MIN} 個字）：${REGEN_KEY}` : `workerKey 還沒填：${REGEN_KEY}`);
 
   if (raw.comfyUrl !== undefined) {
-    const u = httpUrl(str(raw.comfyUrl));
+    const u = checkComfyUrl(raw.comfyUrl);
     if (!u) errors.push(`comfyUrl 不是網址：${String(raw.comfyUrl)}（例："${DEFAULTS.comfyUrl}"）`);
-    else config.comfyUrl = u.href.replace(/\/+$/, '');
+    else config.comfyUrl = u;
+  }
+  if (raw.comfyStart !== undefined && raw.comfyStart !== null) {
+    if (typeof raw.comfyStart !== 'string') errors.push('comfyStart 要填啟動 ComfyUI 的檔案位置（例："C:/ComfyUI_windows_portable/run_nvidia_gpu.bat"），不用自動打開就填 ""');
+    else config.comfyStart = raw.comfyStart.trim();
   }
   if (raw.workflow !== undefined) {
     if (!str(raw.workflow)) errors.push(`workflow 要填 workflow 檔案的位置（例："${DEFAULTS.workflow}"）`);
@@ -111,6 +132,42 @@ export function parseConfig(raw, { inbox: needInbox = true } = {}) {
   num('pollSeconds', 10, 3600, '（幾秒看一次收件處）');
   num('timeoutMinutes', 1, 180, '（一張最多等幾分鐘）');
   return errors.length ? { ok: false, errors, warnings } : { ok: true, config, warnings };
+}
+
+// ---------------------------------------------------------------- 一鍵啟動：設定時拖進視窗的檔案、打開 ComfyUI
+
+/** 拖進視窗的檔案路徑：有空白時 Windows 會加引號、Mac 會用 \ 跳脫，後面還可能多一個空白 */
+export function cleanDroppedPath(input, platform) {
+  const s = String(input ?? '').trim();
+  const q = s[0];
+  if ((q === '"' || q === "'") && s.length >= 2 && s.endsWith(q)) return s.slice(1, -1);
+  return platform === 'win32' ? s : s.replace(/\\(.)/g, '$1');
+}
+
+/** 打開 ComfyUI 的指令：Windows 用 start 開在自己的視窗（.bat、.exe、捷徑都可以），Mac 的 App 用 open */
+export function launchSpec(file, platform) {
+  if (platform === 'win32') {
+    const dir = file.replace(/[\\/][^\\/]*$/, '').replace(/:$/, ':\\.') || '.';
+    return { command: `start "" /D "${dir}" "${file}"`, args: [], options: { shell: true } };
+  }
+  const bare = file.replace(/\/+$/, '');
+  if (platform === 'darwin' && /\.(app|command)$/i.test(bare)) return { command: 'open', args: [bare], options: {} };
+  return { command: file, args: [], options: { cwd: file.replace(/\/[^/]*$/, '') || '/', detached: true } };
+}
+
+/** 用系統預設的程式打開檔案（試畫好的圖） */
+export function openSpec(file, platform) {
+  if (platform === 'win32') return { command: `start "" "${file}"`, args: [], options: { shell: true } };
+  return { command: platform === 'darwin' ? 'open' : 'xdg-open', args: [file], options: {} };
+}
+
+/** 設定時輸入的號碼（1 開始，全形數字也可以）→ 第幾個（0 開始）；直接按 Enter 用 def；不對是 null */
+export function choiceIndex(answer, count, def) {
+  const s = String(answer ?? '').trim().replace(/[０-９]/g, (c) => String.fromCharCode(c.charCodeAt(0) - 0xfee0));
+  if (!s) return def ?? null;
+  if (!/^\d+$/.test(s)) return null;
+  const n = Number(s);
+  return n >= 1 && n <= count ? n - 1 : null;
 }
 
 // ---------------------------------------------------------------- ComfyUI 的 workflow（API 格式）

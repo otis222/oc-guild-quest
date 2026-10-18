@@ -14,6 +14,8 @@ export interface WorkerConfig {
   inboxUrl: string;
   workerKey: string;
   comfyUrl: string;
+  /** 啟動 ComfyUI 的檔案；空字串是不用自動打開 */
+  comfyStart?: string;
   workflow: string;
   imageNode?: string;
   outputNode?: string;
@@ -23,11 +25,20 @@ export interface WorkerConfig {
   timeoutMinutes: number;
 }
 export declare const DEFAULTS: Readonly<Pick<WorkerConfig, 'comfyUrl' | 'workflow' | 'review' | 'candidates' | 'pollSeconds' | 'timeoutMinutes'>>;
+export declare const OTHER_COMFY: Readonly<Record<string, string>>;
 export declare function newKey(bytes: Uint8Array): string;
 export declare function starterConfig(key: string): Record<string, unknown>;
+export declare function checkInboxUrl(input: unknown): { url: string; error?: undefined } | { url?: undefined; error: string };
+export declare function checkComfyUrl(input: unknown): string | null;
 export declare function parseConfig(raw: unknown, o?: { inbox?: boolean }):
   | { ok: true; config: WorkerConfig; warnings: string[] }
   | { ok: false; errors: string[]; warnings: string[] };
+
+export interface SpawnSpec { command: string; args: string[]; options: { shell?: boolean; cwd?: string; detached?: boolean } }
+export declare function cleanDroppedPath(input: unknown, platform: string): string;
+export declare function launchSpec(file: string, platform: string): SpawnSpec;
+export declare function openSpec(file: string, platform: string): SpawnSpec;
+export declare function choiceIndex(answer: unknown, count: number, def?: number): number | null;
 
 export interface WorkflowNode { class_type: string; inputs: Record<string, unknown>; _meta?: { title?: string } }
 export type Workflow = Record<string, WorkflowNode>;

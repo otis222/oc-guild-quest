@@ -2,9 +2,10 @@
 // 每個 OC 的資料夾接下來要做什麼。程式在組員的電腦跑，這裡先確定規則是對的。
 import { describe, expect, it } from 'vitest';
 import {
-  candidateName, findImageNode, findOutputNode, historyState, inQueue, infoText, KEY_MIN, label, newKey,
-  nextStep, outputFiles, parseConfig, parseInboxReply, parsePending, patchWorkflow, pickOutput, promptError,
-  readWorkflow, starterConfig, type ImageRef, type Workflow,
+  candidateName, checkComfyUrl, checkInboxUrl, choiceIndex, cleanDroppedPath, findImageNode, findOutputNode,
+  historyState, inQueue, infoText, KEY_MIN, label, launchSpec, newKey, nextStep, openSpec, outputFiles, parseConfig,
+  parseInboxReply, parsePending, patchWorkflow, pickOutput, promptError, readWorkflow, starterConfig,
+  type ImageRef, type Workflow,
 } from '../../tools/chibi-worker/lib.mjs';
 
 const KEY = 'abcdefghijkmnpqrstuvwxyz';
@@ -38,8 +39,11 @@ describe('設定檔 config.json', () => {
     expect(key.length).toBeGreaterThanOrEqual(KEY_MIN);
     const r = parseConfig(starterConfig(key));
     expect(r.ok).toBe(false);
-    if (!r.ok) expect(r.errors).toEqual([expect.stringContaining('inboxUrl 還沒填')]);
+    if (!r.ok) expect(r.errors).toEqual([expect.stringContaining('inboxUrl：還沒貼上')]);
     expect(parseConfig({ ...starterConfig(key), inboxUrl: INBOX }).ok).toBe(true);
+    // 模式和 ComfyUI 啟動檔留給設定時問
+    expect(starterConfig(key)).not.toHaveProperty('review');
+    expect(starterConfig(key)).not.toHaveProperty('comfyStart');
   });
 
   it('網址不對：沒填、不是網址、不是 https、用了 /dev', () => {
@@ -47,7 +51,7 @@ describe('設定檔 config.json', () => {
       const r = parseConfig({ inboxUrl, workerKey: KEY });
       return r.ok ? '' : r.errors.join();
     };
-    expect(err('')).toContain('inboxUrl 還沒填');
+    expect(err('')).toContain('inboxUrl：還沒貼上');
     expect(err('script.google.com')).toContain('不是網址');
     expect(err('http://script.google.com/macros/s/x/exec')).toContain('https://');
     expect(err('https://script.google.com/macros/s/x/dev')).toContain('/exec');
@@ -72,7 +76,7 @@ describe('設定檔 config.json', () => {
       comfyUrl: 'http://127.0.0.1:8000', review: true, candidates: 4, imageNode: '10', outputNode: 'Save Image', pollSeconds: 60, timeoutMinutes: 5,
     });
     const bad = parseConfig({
-      inboxUrl: INBOX, workerKey: KEY, comfyUrl: 'localhost', review: 'true', candidates: 0, pollSeconds: 1, timeoutMinutes: 1.5, workflow: ' ', imageNode: {},
+      inboxUrl: INBOX, workerKey: KEY, comfyUrl: 'ftp://x', review: 'true', candidates: 0, pollSeconds: 1, timeoutMinutes: 1.5, workflow: ' ', imageNode: {},
     });
     expect(bad.ok).toBe(false);
     if (!bad.ok) expect(bad.errors).toHaveLength(7);
@@ -80,15 +84,66 @@ describe('設定檔 config.json', () => {
     expect(parseConfig([])).toMatchObject({ ok: false });
   });
 
-  it('只試跑 ComfyUI（--try）：收件處的網址和鑰匙還沒填也可以', () => {
-    expect(parseConfig({ inboxUrl: '', workerKey: '' }, { inbox: false })).toMatchObject({ ok: true, config: { comfyUrl: 'http://127.0.0.1:8188' } });
-    expect(parseConfig({ comfyUrl: 'nope' }, { inbox: false })).toMatchObject({ ok: false });
+  it('收件處還沒設好也可以先讀（--try、設定到一半）：填對的照樣留著', () => {
+    expect(parseConfig({ inboxUrl: '', workerKey: '' }, { inbox: false })).toMatchObject({ ok: true, config: { comfyUrl: 'http://127.0.0.1:8188', inboxUrl: '' } });
+    expect(parseConfig({ inboxUrl: INBOX, workerKey: 'short' }, { inbox: false })).toMatchObject({ ok: true, config: { inboxUrl: INBOX, workerKey: '' } });
+    expect(parseConfig({ comfyUrl: 'ftp://x' }, { inbox: false })).toMatchObject({ ok: false });
+  });
+
+  it('ComfyUI 啟動檔：有填就記下來，空字串是不用自動打開', () => {
+    const start = 'C:/ComfyUI_windows_portable/run_nvidia_gpu.bat';
+    expect(parseConfig({ inboxUrl: INBOX, workerKey: KEY, comfyStart: ` ${start} ` })).toMatchObject({ ok: true, config: { comfyStart: start } });
+    expect(parseConfig({ inboxUrl: INBOX, workerKey: KEY, comfyStart: '' })).toMatchObject({ ok: true, config: { comfyStart: '' } });
+    expect(parseConfig({ inboxUrl: INBOX, workerKey: KEY, comfyStart: 1 })).toMatchObject({ ok: false });
+  });
+
+  it('網址：收件處要 https 的 /exec；ComfyUI 沒寫 http:// 也可以', () => {
+    expect(checkInboxUrl(` ${INBOX} `)).toEqual({ url: INBOX });
+    expect(checkInboxUrl('')).toEqual({ error: expect.stringContaining('還沒貼上') });
+    expect(checkInboxUrl('打不開')).toEqual({ error: '「打不開」不是網址' });
+    expect(checkComfyUrl('127.0.0.1:8000/')).toBe('http://127.0.0.1:8000');
+    expect(checkComfyUrl('http://192.168.0.5:8188/?x=1')).toBe('http://192.168.0.5:8188');
+    expect(checkComfyUrl('ftp://x')).toBeNull();
+    expect(checkComfyUrl('')).toBeNull();
   });
 
   it('不認得的設定：提醒拼字，不擋', () => {
     const r = parseConfig({ inboxUrl: INBOX, workerKey: KEY, reveiw: true });
     expect(r.ok).toBe(true);
     expect(r.warnings).toEqual([expect.stringContaining('reveiw')]);
+  });
+});
+
+describe('一鍵啟動：設定時拖進視窗的檔案、打開 ComfyUI', () => {
+  it('拖進視窗的路徑：去掉 Windows 的引號、Mac 的跳脫和多出來的空白', () => {
+    expect(cleanDroppedPath('"C:\\Comfy UI\\run_nvidia_gpu.bat"', 'win32')).toBe('C:\\Comfy UI\\run_nvidia_gpu.bat');
+    expect(cleanDroppedPath('C:\\ComfyUI\\run.bat', 'win32')).toBe('C:\\ComfyUI\\run.bat');
+    expect(cleanDroppedPath('/Users/me/My\\ Comfy/start\\ comfy.command ', 'darwin')).toBe('/Users/me/My Comfy/start comfy.command');
+    expect(cleanDroppedPath("'/home/me/comfy dir/run.sh' ", 'linux')).toBe('/home/me/comfy dir/run.sh');
+    expect(cleanDroppedPath('  ', 'win32')).toBe('');
+  });
+
+  it('打開 ComfyUI：Windows 在自己的資料夾開新視窗；Mac 的 App 用 open；其他直接執行', () => {
+    expect(launchSpec('C:\\Comfy UI\\run_nvidia_gpu.bat', 'win32')).toEqual({
+      command: 'start "" /D "C:\\Comfy UI" "C:\\Comfy UI\\run_nvidia_gpu.bat"', args: [], options: { shell: true },
+    });
+    expect(launchSpec('D:\\run.bat', 'win32').command).toBe('start "" /D "D:\\." "D:\\run.bat"');
+    expect(launchSpec('/Applications/ComfyUI.app/', 'darwin')).toEqual({ command: 'open', args: ['/Applications/ComfyUI.app'], options: {} });
+    expect(launchSpec('/Users/me/start.command', 'darwin').command).toBe('open');
+    expect(launchSpec('/home/me/comfy/run.sh', 'linux')).toEqual({ command: '/home/me/comfy/run.sh', args: [], options: { cwd: '/home/me/comfy', detached: true } });
+    expect(openSpec('C:\\jobs\\_try\\1.png', 'win32').command).toBe('start "" "C:\\jobs\\_try\\1.png"');
+    expect(openSpec('/tmp/1.png', 'darwin')).toEqual({ command: 'open', args: ['/tmp/1.png'], options: {} });
+    expect(openSpec('/tmp/1.png', 'linux').command).toBe('xdg-open');
+  });
+
+  it('選號碼：1 開始、全形數字也可以；直接按 Enter 用預設；不對是 null', () => {
+    expect(choiceIndex('2', 3)).toBe(1);
+    expect(choiceIndex(' ３ ', 3)).toBe(2);
+    expect(choiceIndex('', 3, 2)).toBe(2);
+    expect(choiceIndex('', 3)).toBeNull();
+    expect(choiceIndex('4', 3)).toBeNull();
+    expect(choiceIndex('0', 3)).toBeNull();
+    expect(choiceIndex('第一個', 3)).toBeNull();
   });
 });
 

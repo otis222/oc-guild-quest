@@ -119,12 +119,16 @@ export function openChibi(d: ChibiDeps): void {
           mime: image.mime, image: await blobToBase64(image.blob),
         };
         const reply = await sendChibi(d.endpoint, payload);
-        if (closed) return;
         if (reply.ok) {
+          // 送到了就記下領取碼，送的時候關掉視窗也一樣（不然組員會做到沒人領的小人）
+          const old = d.store.state.chibi?.request?.code;
           await d.requested(code, image.blob.size);
-          show();
+          // 換一張重送：請收件處丟掉舊的那張（不等它）
+          if (old && old !== code) void finishChibi(d.endpoint, old);
+          if (!closed) show();
           return;
         }
+        if (closed) return;
         if (reply.error === 'invite') { needInvite = true; inviteRow.hidden = false; invite.focus(); }
         msg.textContent = errorText(reply.error);
         send.disabled = false;

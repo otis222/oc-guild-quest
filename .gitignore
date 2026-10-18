@@ -6,3 +6,8 @@ dist/
 Thumbs.db
 test-results/
 playwright-report/
+
+# 專屬小人自動生成程式：設定檔（有鑰匙）、組員的 workflow、玩家的 OC 圖和做好的小人，都不要上傳
+tools/chibi-worker/config.json
+tools/chibi-worker/workflow_api.json
+tools/chibi-worker/jobs/

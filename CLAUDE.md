@@ -36,8 +36,9 @@
 - `src/ui/`：HTML overlay 畫面（委託板、關卡計時、OC 設定卡、交件、研究模式、第一次進入的建立 OC 卡片）。
 - `public/sprites/`：小人圖檔與 `manifest.json`。
 - `legacy/`：原始 demo，只讀參考，不要修改。
-- `docs/`：企劃表、對映表、進度紀錄、專屬小人設定（給組員部署收件處）。
+- `docs/`：企劃表、對映表、進度紀錄、專屬小人設定（給組員部署收件處、設定自動生成）。
 - `tools/chibi-apps-script/`：專屬小人的收件處（Apps Script），組員部署到自己的 Google 帳號，不會打包進網站。
+- `tools/chibi-worker/`：專屬小人的自動生成程式，在組員的電腦用 Node.js 跑（收件處 → 組員的 ComfyUI → 收件處），不會打包進網站。規則在 `lib.mjs`，要有 Vitest 測試。
 
 TypeScript 開 `strict`。不用前端框架（不用 React／Vue）。
 

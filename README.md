@@ -32,5 +32,5 @@ push 到 `main` 以後，GitHub Actions（`.github/workflows/deploy.yml`）會�
 - `docs/企劃表.md`：企劃、任務卡、規格
 - `docs/進度紀錄.md`：每張任務卡做了什麼、怎麼驗收、需要人確認的
 - `docs/對映表.md`：紙原型和網頁原型的對照
-- `docs/專屬小人設定.md`：專屬小人的收件處怎麼部署、組員怎麼用 ComfyUI 做小人
+- `docs/專屬小人設定.md`：專屬小人的收件處怎麼部署、組員電腦上的自動生成程式（ComfyUI）怎麼設定
 - `CLAUDE.md`：給 Claude Code 的工作說明

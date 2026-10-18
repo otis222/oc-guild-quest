@@ -1,5 +1,5 @@
 // 專屬小人（T19）跟收件處（組員 Google 帳號裡的 Apps Script，tools/chibi-apps-script/Code.gs）連線：
-// 送 OC 圖、問做好了沒、領完通知收件處刪檔。
+// 送 OC 圖、問做好了沒、領完（或換一張重送）通知收件處刪檔。
 // POST 用 text/plain 送 JSON：這樣瀏覽器不會先送 OPTIONS 問 CORS（Apps Script 不回 OPTIONS）。
 import { parseChibiResult, parseSendReply, type ChibiError, type ChibiPayload, type ChibiResult } from '../core/chibi';
 
@@ -44,7 +44,7 @@ export async function checkChibi(endpoint: string, code: string): Promise<ChibiR
   }
 }
 
-/** 領到了：請收件處把這個領取碼的 OC 圖和小人圖丟進垃圾桶（失敗也沒關係，組員可以手動刪） */
+/** 領到了、或換一張重送了：請收件處把這個領取碼的 OC 圖和小人圖丟進垃圾桶（失敗也沒關係，組員可以手動刪） */
 export async function finishChibi(endpoint: string, code: string): Promise<void> {
   try {
     await post(endpoint, { action: 'done', code });

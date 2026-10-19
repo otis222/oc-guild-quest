@@ -2,9 +2,10 @@
 // 每個 OC 的資料夾接下來要做什麼。程式在組員的電腦跑，這裡先確定規則是對的。
 import { describe, expect, it } from 'vitest';
 import {
-  candidateName, checkComfyUrl, checkInboxUrl, choiceIndex, cleanDroppedPath, findImageNode, findOutputNode,
-  historyState, inQueue, infoText, KEY_MIN, label, launchSpec, newKey, nextStep, openSpec, outputFiles, parseConfig,
-  parseInboxReply, parsePending, patchWorkflow, pickOutput, promptError, readWorkflow, starterConfig,
+  candidateName, checkComfyUrl, checkInboxUrl, choiceIndex, cleanDescription, cleanDroppedPath, DESCRIBE_PROMPT, DESCRIPTION,
+  DESCRIPTION_SLOT, findImageNode, findOutputNode, hasDescriptionSlot, historyState, inQueue, infoText, KEY_MIN, label,
+  launchSpec, newKey, nextStep, OLLAMA_URL, openSpec, outputFiles, parseConfig, parseInboxReply, parsePending,
+  patchWorkflow, pickOutput, promptError, readWorkflow, starterConfig,
   type ImageRef, type Workflow,
 } from '../../tools/chibi-worker/lib.mjs';
 
@@ -107,6 +108,19 @@ describe('設定檔 config.json', () => {
     expect(checkComfyUrl('')).toBeNull();
   });
 
+  it('看圖 AI：填了模型才先寫描述，Ollama 網址用預設的；只填網址不算', () => {
+    const base = { inboxUrl: INBOX, workerKey: KEY };
+    expect(parseConfig({ ...base, describe: ' qwen3-vl:8b ' })).toMatchObject({ ok: true, warnings: [], config: { describe: 'qwen3-vl:8b', ollamaUrl: OLLAMA_URL } });
+    expect(parseConfig({ ...base, describe: 'qwen3-vl:8b', ollamaUrl: '192.168.1.5:11434/' })).toMatchObject({ ok: true, config: { ollamaUrl: 'http://192.168.1.5:11434' } });
+    for (const raw of [{ ...base }, { ...base, describe: '' }, { ...base, ollamaUrl: OLLAMA_URL }]) {
+      const r = parseConfig(raw);
+      expect(r.ok && 'describe' in r.config).toBe(false);
+      expect(r.ok && 'ollamaUrl' in r.config).toBe(false);
+    }
+    expect(parseConfig({ ...base, describe: 8 })).toMatchObject({ ok: false, errors: [expect.stringContaining('describe')] });
+    expect(parseConfig({ ...base, describe: 'qwen3-vl:8b', ollamaUrl: 'ftp://x' })).toMatchObject({ ok: false, errors: [expect.stringContaining('ollamaUrl')] });
+  });
+
   it('不認得的設定：提醒拼字，不擋', () => {
     const r = parseConfig({ inboxUrl: INBOX, workerKey: KEY, reveiw: true });
     expect(r.ok).toBe(true);
@@ -196,6 +210,41 @@ describe('ComfyUI 的 workflow', () => {
     expect(WORKFLOW[3].inputs.seed).toBe(123);
     const seeds = new Set(Array.from({ length: 5 }, () => patchWorkflow(w, { imageNode: '10', image: 'x', prefix: 'p' })[3].inputs.seed));
     expect(seeds.size).toBe(5);
+  });
+
+  it('提示詞裡的 {{OC_DESCRIPTION}} 換成看圖 AI 寫的描述；沒有描述就拿掉', () => {
+    const text = `Draw one chibi girl. ${DESCRIPTION_SLOT} Plain green background.`;
+    const w: Workflow = { ...WORKFLOW, 6: { class_type: 'CLIPTextEncode', inputs: { text, clip: ['4', 1] } } };
+    expect(hasDescriptionSlot(w)).toBe(true);
+    expect(hasDescriptionSlot(WORKFLOW)).toBe(false);
+    const filled = patchWorkflow(w, { imageNode: '10', image: 'x', prefix: 'p', description: 'She has pink hair.' });
+    expect(filled[6].inputs.text).toBe('Draw one chibi girl. She has pink hair. Plain green background.');
+    expect(filled[6].inputs.clip).toEqual(['4', 1]);
+    expect(patchWorkflow(w, { imageNode: '10', image: 'x', prefix: 'p' })[6].inputs.text).toBe('Draw one chibi girl. Plain green background.');
+    expect(w[6].inputs.text).toBe(text);
+  });
+});
+
+describe('看圖 AI 寫的描述', () => {
+  it('請它照標準畫風 FT 第一段的寫法：只寫角色，不寫姿勢、背景、畫風', () => {
+    expect(DESCRIBE_PROMPT).toContain('one paragraph');
+    expect(DESCRIBE_PROMPT).toMatch(/do not describe the pose, the camera angle, the background/);
+  });
+
+  it('整理成一段：拿掉思考過程、開頭的標題、條列符號、Markdown、包住整段的引號', () => {
+    const raw = '<think>The image shows a girl…</think>\nDescription:\n"**She has** long pink hair with two horns.\n- She wears a pink jacket and white pants."';
+    expect(cleanDescription(raw)).toBe('She has long pink hair with two horns. She wears a pink jacket and white pants.');
+    expect(cleanDescription('She has long pink hair with two small dark red horns')).toBe('She has long pink hair with two small dark red horns.');
+  });
+
+  it('沒寫出來（空的、太短）是空字串；太長就在句號切掉', () => {
+    expect(cleanDescription('')).toBe('');
+    expect(cleanDescription(undefined)).toBe('');
+    expect(cleanDescription('<think>a long thought</think>  ')).toBe('');
+    expect(cleanDescription('Pink hair.')).toBe('');
+    const long = cleanDescription('She has pink hair. '.repeat(120));
+    expect(long.length).toBeLessThanOrEqual(1500);
+    expect(long.endsWith('pink hair.')).toBe(true);
   });
 });
 
@@ -310,6 +359,18 @@ describe('每個 OC 的資料夾（jobs/領取碼/）', () => {
     expect(nextStep(['oc.png', '1.png', '2.png', '3.png', 'okay.png'], review)).toEqual({ step: 'wait', count: 3 });
     // 自動模式畫好的 chibi.png 不算候選
     expect(nextStep(['oc.png', 'chibi.png'], review)).toEqual({ step: 'generate', count: 3 });
+  });
+
+  it('設了看圖 AI：下載後先寫描述再畫；描述已經有了（或組員改過）就直接畫', () => {
+    const describe = 'qwen3-vl:8b';
+    expect(nextStep(['oc.png', 'info.txt'], { ...auto, describe })).toEqual({ step: 'describe' });
+    expect(nextStep(['oc.png', 'info.txt', DESCRIPTION], { ...auto, describe })).toEqual({ step: 'generate', count: 1 });
+    expect(nextStep(['oc.png', 'chibi.png'], { ...auto, describe })).toEqual({ step: 'send', file: 'chibi.png' });
+    expect(nextStep(['oc.png', 'info.txt'], { ...review, describe })).toEqual({ step: 'describe' });
+    // 候選都畫好了就不用再寫（例如畫好以後才打開看圖 AI）
+    expect(nextStep(['oc.png', '1.png', '2.png', '3.png'], { ...review, describe })).toEqual({ step: 'wait', count: 3 });
+    // 重畫時描述留著（組員可能改過）
+    expect(outputFiles(['oc.png', DESCRIPTION, 'chibi.png', 'sent.txt'])).toEqual(['chibi.png', 'sent.txt']);
   });
 
   it('候選的檔名接著最大的編號', () => {

@@ -23,8 +23,13 @@ export interface WorkerConfig {
   candidates: number;
   pollSeconds: number;
   timeoutMinutes: number;
+  /** Ollama 的看圖模型；有填才會先寫描述 */
+  describe?: string;
+  /** Ollama 的網址（有填 describe 才有） */
+  ollamaUrl?: string;
 }
 export declare const DEFAULTS: Readonly<Pick<WorkerConfig, 'comfyUrl' | 'workflow' | 'review' | 'candidates' | 'pollSeconds' | 'timeoutMinutes'>>;
+export declare const OLLAMA_URL: string;
 export declare const OTHER_COMFY: Readonly<Record<string, string>>;
 export declare function newKey(bytes: Uint8Array): string;
 export declare function starterConfig(key: string): Record<string, unknown>;
@@ -52,8 +57,14 @@ export declare function findOutputNode(w: Workflow, wanted?: string):
   | { ok: false; error: string };
 export declare function patchWorkflow(
   w: Workflow,
-  o: { imageNode: string; image: string; prefix: string; rand?: () => number },
+  o: { imageNode: string; image: string; prefix: string; description?: string; rand?: () => number },
 ): Workflow;
+
+export declare const DESCRIPTION: string;
+export declare const DESCRIPTION_SLOT: string;
+export declare const DESCRIBE_PROMPT: string;
+export declare function cleanDescription(text: unknown): string;
+export declare function hasDescriptionSlot(w: Workflow): boolean;
 
 export interface ImageRef { nodeId: string; filename: string; subfolder: string; type: string }
 export type PromptState =
@@ -79,9 +90,10 @@ export type Step =
   | { step: 'redo' }
   | { step: 'download' }
   | { step: 'send'; file: string }
+  | { step: 'describe' }
   | { step: 'generate'; count: number }
   | { step: 'wait'; count: number };
-export declare function nextStep(files: string[], o: { review: boolean; candidates: number }): Step;
+export declare function nextStep(files: string[], o: { review: boolean; candidates: number; describe?: string }): Step;
 export declare function outputFiles(files: string[]): string[];
 export declare function candidateName(files: string[], ext: string): string;
 export declare function infoText(item: PendingItem, when: string): string;

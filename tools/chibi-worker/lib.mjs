@@ -31,8 +31,10 @@ export const DEFAULTS = {
 };
 const KNOWN = [
   'inboxUrl', 'workerKey', 'comfyUrl', 'comfyStart', 'workflow', 'imageNode', 'outputNode',
-  'review', 'candidates', 'pollSeconds', 'timeoutMinutes',
+  'review', 'candidates', 'pollSeconds', 'timeoutMinutes', 'describe', 'ollamaUrl',
 ];
+/** Ollama（本機跑看圖 AI 的程式）預設的網址 */
+export const OLLAMA_URL = 'http://127.0.0.1:11434';
 /** ComfyUI 常見的兩個網址：自己裝的、免安裝版用 8188，ComfyUI Desktop 用 8000 */
 export const OTHER_COMFY = {
   'http://127.0.0.1:8188': 'http://127.0.0.1:8000',
@@ -131,6 +133,19 @@ export function parseConfig(raw, { inbox: needInbox = true } = {}) {
   num('candidates', 1, 8, '（挑選模式每個 OC 畫幾張）');
   num('pollSeconds', 10, 3600, '（幾秒看一次收件處）');
   num('timeoutMinutes', 1, 180, '（一張最多等幾分鐘）');
+  // 看圖 AI：有填模型名稱才會先寫描述（Ollama 的網址沒填用預設的）
+  if (raw.describe !== undefined && raw.describe !== null && raw.describe !== '') {
+    if (typeof raw.describe !== 'string' || !raw.describe.trim()) errors.push('describe 要填 Ollama 的看圖模型（例："qwen3-vl:8b"），不用就填 ""');
+    else {
+      config.describe = raw.describe.trim();
+      config.ollamaUrl = OLLAMA_URL;
+    }
+  }
+  if (raw.ollamaUrl !== undefined && raw.ollamaUrl !== null && raw.ollamaUrl !== '') {
+    const u = checkComfyUrl(raw.ollamaUrl);
+    if (!u) errors.push(`ollamaUrl 不是網址：${String(raw.ollamaUrl)}（例："${OLLAMA_URL}"）`);
+    else if (config.describe) config.ollamaUrl = u;
+  }
   return errors.length ? { ok: false, errors, warnings } : { ok: true, config, warnings };
 }
 
@@ -237,17 +252,61 @@ const SEED_INPUTS = ['seed', 'noise_seed'];
 
 /**
  * 這次要跑的 workflow：OC 圖放進 imageNode；種子每次換新的（同一張 OC 重畫才會不一樣）；
- * Save Image 存到 ComfyUI output 裡的 oc-guild-quest/領取碼_00001_.png，之後好找、好刪。
+ * Save Image 存到 ComfyUI output 裡的 oc-guild-quest/領取碼_00001_.png，之後好找、好刪；
+ * 提示詞裡的 {{OC_DESCRIPTION}} 換成看圖 AI 寫的描述（沒有描述就拿掉）。
  */
-export function patchWorkflow(w, { imageNode, image, prefix, rand = Math.random }) {
+export function patchWorkflow(w, { imageNode, image, prefix, description = '', rand = Math.random }) {
   const out = JSON.parse(JSON.stringify(w));
   out[imageNode].inputs.image = image;
   for (const node of Object.values(out)) {
     for (const k of SEED_INPUTS) if (typeof node.inputs[k] === 'number') node.inputs[k] = Math.floor(rand() * 2 ** 32);
     if (node.class_type === 'SaveImage' && typeof node.inputs.filename_prefix === 'string') node.inputs.filename_prefix = prefix;
+    for (const [k, v] of Object.entries(node.inputs)) {
+      if (typeof v !== 'string' || !v.includes(DESCRIPTION_SLOT)) continue;
+      const filled = v.split(DESCRIPTION_SLOT).join(description);
+      node.inputs[k] = description ? filled : filled.replace(/[ \t]{2,}/g, ' ');
+    }
   }
   return out;
 }
+
+// ---------------------------------------------------------------- 看圖 AI（Ollama）先寫 OC 的描述
+
+/** jobs/領取碼/ 裡的描述；組員可以打開改，改完刪掉畫好的圖就會照新的描述重畫 */
+export const DESCRIPTION = 'description.txt';
+/** workflow 的提示詞裡放描述的位置 */
+export const DESCRIPTION_SLOT = '{{OC_DESCRIPTION}}';
+/** 描述最多幾個字（標準畫風 v5 手寫的那段大約 1000 字） */
+const DESCRIPTION_MAX = 1500;
+
+/** 請看圖 AI 寫描述的話：照標準畫風 FT 第一段的寫法（英文，因為提示詞是英文的）；範例故意用別的角色，免得它照抄 */
+export const DESCRIBE_PROMPT = `You are writing the character description for an illustrator who will redraw this original character as a small chibi game sprite.
+Look carefully at the character in the image and describe only her design, in one paragraph of 5 to 8 sentences, written like this example (a different character):
+
+"She has short wavy chestnut-brown hair with straight bangs and a small yellow star hair clip on the left side. She has round fox ears with white tips, large emerald-green eyes and a cheerful smile. She wears a navy sailor collar with a red neckerchief, a white short-sleeved blouse and a pleated navy skirt with a white stripe near the hem. She wears white ankle socks and brown loafers, and has a fluffy orange fox tail with a white tip."
+
+Cover, in this order: hair (exact colors, length, hairstyle, bangs, streaks or gradients, hair accessories); ears, horns, halo or animal features; eye color and expression; the outfit from the neck down, each layer with its exact colors and notable details; legwear; footwear; tail or wings if she has them.
+Rules: use precise color names; describe only what is visible on the character; do not describe the pose, the camera angle, the background, the lighting, the art style or the image quality; do not mention objects she is holding; write plain sentences that start with "She" or "Her" (use "He" and "His" if the character is clearly male); output only the paragraph.`;
+
+/** 看圖 AI 的回答 → 一段描述：拿掉思考過程、開頭的「Description:」、條列符號、Markdown、包住整段的引號；太短（沒寫出來）是 '' */
+export function cleanDescription(text) {
+  const s = String(text ?? '')
+    .replace(/<think>[\s\S]*?<\/think>/gi, ' ')
+    .replace(/^\s*[^\n.]{0,60}:\s*\n/, '')
+    .replace(/^\s*(?:[-*•]|\d+[.)])\s+/gm, '')
+    .replace(/[*`#]+/g, '')
+    .replace(/\s+/g, ' ')
+    .trim()
+    .replace(/^["“”「」']+|["“”「」']+$/g, '')
+    .trim();
+  if (s.length < 40) return '';
+  const cut = s.length > DESCRIPTION_MAX ? s.slice(0, s.lastIndexOf('.', DESCRIPTION_MAX) + 1 || DESCRIPTION_MAX) : s;
+  return /[.!?]$/.test(cut) ? cut : `${cut}.`;
+}
+
+/** workflow 的提示詞裡有沒有放描述的位置 */
+export const hasDescriptionSlot = (w) =>
+  Object.values(w).some((n) => Object.values(n.inputs).some((v) => typeof v === 'string' && v.includes(DESCRIPTION_SLOT)));
 
 // ---------------------------------------------------------------- ComfyUI 的回答
 
@@ -370,16 +429,18 @@ const isCandidate = (f) => new RegExp(`^\\d+${IMAGE}`, 'i').test(f);
  * - redo：送出過了，但雲端 results 裡的小人被刪掉了（組員想重畫）→ 清掉畫好的再畫
  * - download：還沒有 OC 圖
  * - send：有要送的小人（自動模式的 chibi.png；挑選模式組員改名的 ok.png）
+ * - describe：設了看圖 AI（describe），還要畫、卻還沒有 description.txt → 先寫描述
  * - generate：要再畫 count 張（挑選模式不要的刪掉，就會補畫）
  * - wait：挑選模式，候選都畫好了，等組員挑
  */
-export function nextStep(files, { review, candidates }) {
+export function nextStep(files, { review, candidates, describe }) {
   if (files.includes(SENT)) return { step: 'redo' };
   if (!files.some(isOcFile)) return { step: 'download' };
   const pick = files.find(review ? isOk : isChibi);
   if (pick) return { step: 'send', file: pick };
-  if (!review) return { step: 'generate', count: 1 };
   const have = files.filter(isCandidate).length;
+  if (describe && !files.includes(DESCRIPTION) && (!review || have < candidates)) return { step: 'describe' };
+  if (!review) return { step: 'generate', count: 1 };
   return have < candidates ? { step: 'generate', count: candidates - have } : { step: 'wait', count: have };
 }
 

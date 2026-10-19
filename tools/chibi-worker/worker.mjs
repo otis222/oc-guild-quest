@@ -51,6 +51,8 @@ const interactive = Boolean(process.stdin.isTTY && process.stdout.isTTY) && !['-
 const COMFY_POLL_MS = 2000;
 /** 幫忙打開 ComfyUI 以後最多等多久 */
 const COMFY_START_MS = 5 * 60_000;
+/** 看圖 AI 寫一段描述最多等多久（會先「想」再寫，第一次還要載入模型） */
+const DESCRIBE_TIMEOUT_MS = 5 * 60_000;
 
 // ---------------------------------------------------------------- 印訊息
 
@@ -346,10 +348,10 @@ async function download(ctx, ref) {
 }
 
 /** 跑一次 workflow，拿回要送的那張圖。key 用來記住排進 ComfyUI 的工作，等太久下一輪可以接著等 */
-async function render(ctx, image, prefix, key) {
+async function render(ctx, image, prefix, key, description = '') {
   let id = ctx.inflight.get(key);
   if (!id) {
-    const prompt = lib.patchWorkflow(ctx.wf.workflow, { imageNode: ctx.wf.imageNode.id, image, prefix });
+    const prompt = lib.patchWorkflow(ctx.wf.workflow, { imageNode: ctx.wf.imageNode.id, image, prefix, description });
     const { res, body } = await comfyJson(ctx, '/prompt', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
@@ -367,6 +369,66 @@ async function render(ctx, image, prefix, key) {
       : 'workflow 跑完了，但沒有輸出圖：最後要有 Save Image 節點');
   }
   return download(ctx, ref);
+}
+
+// ---------------------------------------------------------------- 看圖 AI（Ollama）
+
+const OLLAMA_DOWN = (ctx) => `連不上 Ollama（${ctx.config.ollamaUrl}）：Ollama 開了嗎？（開機會自己開，右下角有羊駝圖示）開了就會繼續`;
+const OLLAMA_PULL = (ctx) => `Ollama 裡沒有 ${ctx.config.describe}：在終端機執行 ollama pull ${ctx.config.describe}`;
+
+/** 看圖 AI 和 workflow 對不對得上：設了 describe，提示詞裡卻沒有 {{OC_DESCRIPTION}}；或反過來 */
+function describeNotes(ctx) {
+  const slot = lib.hasDescriptionSlot(ctx.wf.workflow);
+  if (ctx.config.describe && !slot) return [`workflow 的提示詞裡沒有 ${lib.DESCRIPTION_SLOT}：看圖 AI 寫的描述不會用上`];
+  if (!ctx.config.describe && slot) return [`workflow 的提示詞裡有 ${lib.DESCRIPTION_SLOT}，但 config.json 沒設 "describe"：那個位置會是空的`];
+  return [];
+}
+
+/** 檢查時用：Ollama 有沒有開、有沒有這個模型 */
+async function ollamaReady(ctx) {
+  let body;
+  try {
+    body = await (await fetch(`${ctx.config.ollamaUrl}/api/tags`, { signal: AbortSignal.timeout(5000) })).json();
+  } catch {
+    throw new Later('ollama', OLLAMA_DOWN(ctx));
+  }
+  const names = Array.isArray(body?.models) ? body.models.map((m) => String(m?.name ?? '')) : [];
+  const want = ctx.config.describe.includes(':') ? ctx.config.describe : `${ctx.config.describe}:latest`;
+  if (!names.includes(want)) throw new Error(OLLAMA_PULL(ctx));
+}
+
+/** 請看圖 AI 看 OC 寫描述；寫完馬上卸載模型，把顯示卡讓給 ComfyUI */
+async function describeOc(ctx, bytes) {
+  let res;
+  let body;
+  try {
+    res = await fetch(`${ctx.config.ollamaUrl}/api/chat`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        model: ctx.config.describe,
+        stream: false,
+        keep_alive: 0,
+        // 有的模型（例如 qwen3-vl）一定會先「想」再寫，額度要給夠，不然還沒寫到描述就停了
+        options: { temperature: 0.2, num_predict: 6000 },
+        messages: [{ role: 'user', content: lib.DESCRIBE_PROMPT, images: [Buffer.from(bytes).toString('base64')] }],
+      }),
+      signal: AbortSignal.timeout(DESCRIBE_TIMEOUT_MS),
+    });
+    body = await res.json().catch(() => null);
+  } catch (err) {
+    if (err.name === 'TimeoutError') throw new Later('ollama', `看圖 AI 寫了 ${DESCRIBE_TIMEOUT_MS / 60_000} 分鐘還沒寫完，下一輪再試`);
+    throw new Later('ollama', OLLAMA_DOWN(ctx));
+  }
+  fine('ollama', 'Ollama 連上了');
+  if (!res.ok) {
+    const msg = String(body?.error ?? res.status);
+    if (/not found/i.test(msg)) throw new Later('ollama', OLLAMA_PULL(ctx));
+    throw new Error(`看圖 AI 出錯：${msg}`);
+  }
+  const text = lib.cleanDescription(body?.message?.content);
+  if (!text) throw new Later('ollama', '看圖 AI 這次沒寫出描述，下一輪再試');
+  return text;
 }
 
 // ---------------------------------------------------------------- 收件處
@@ -415,6 +477,7 @@ async function check(ctx) {
     const d = describeWorkflow(wf);
     good(`workflow：${d.text}`);
     d.notes.forEach(warn);
+    describeNotes(ctx).forEach(warn);
   }
 
   try {
@@ -427,6 +490,17 @@ async function check(ctx) {
     const other = lib.OTHER_COMFY[ctx.config.comfyUrl];
     if (other && (await comfyAlive(other))) {
       warn(`${other} 有 ComfyUI 在跑：把 config.json 的 "comfyUrl" 改成 "${other}"`);
+    }
+  }
+
+  if (ctx.config.describe) {
+    try {
+      await ollamaReady(ctx);
+      good(`看圖 AI：${ctx.config.describe}（Ollama，${ctx.config.ollamaUrl}）`);
+    } catch (err) {
+      problems++;
+      bad(err.message);
+      if (err instanceof Later) troubles.set(err.key, err.message);
     }
   }
 
@@ -703,7 +777,7 @@ const localCodes = async () => {
   }
 };
 
-/** 照 jobs/領取碼/ 裡的檔案一步一步做：下載 → 畫 → 送出（挑選模式在送出前等組員挑） */
+/** 照 jobs/領取碼/ 裡的檔案一步一步做：下載 →（看圖 AI 寫描述）→ 畫 → 送出（挑選模式在送出前等組員挑） */
 async function work(ctx, item) {
   const dir = join(jobsDir, item.code);
   const tag = lib.label(item);
@@ -721,14 +795,21 @@ async function work(ctx, item) {
       await writeFile(join(dir, `oc.${ext}`), Buffer.from(img.image, 'base64'));
       await writeFile(join(dir, lib.INFO), lib.infoText(item, new Date(item.requestedAt || Date.now()).toLocaleString('zh-TW', { hour12: false })));
       log(`${tag}：收到新的 OC${item.note ? `，給你的話：「${item.note}」` : ''}`);
+    } else if (next.step === 'describe') {
+      const oc = files.find(lib.isOcFile);
+      log(`${tag}：請看圖 AI（${ctx.config.describe}）看 OC 寫描述`);
+      const text = await describeOc(ctx, await readFile(join(dir, oc)));
+      await writeFile(join(dir, lib.DESCRIPTION), `${text}\n`);
+      log(`${tag}：描述寫好了（想改就打開 ${join(dir, lib.DESCRIPTION)}，改完刪掉畫好的圖會照新的重畫）\n  ${text}`);
     } else if (next.step === 'generate') {
       said.delete(item.code);
       const oc = files.find(lib.isOcFile);
       const ext = lib.extOf(oc);
+      const description = files.includes(lib.DESCRIPTION) ? (await readFile(join(dir, lib.DESCRIPTION), 'utf8')).trim() : '';
       const image = await comfyUpload(ctx, await readFile(join(dir, oc)), `${item.code}.${ext}`, lib.MIME_OF[ext]);
       for (let i = 1; i <= next.count; i++) {
         log(`${tag}：ComfyUI 畫小人中${next.count > 1 ? `（${i}/${next.count}）` : ''}`);
-        const out = await render(ctx, image, `${lib.COMFY_SUBFOLDER}/${item.code}`, `${item.code}#${i}`);
+        const out = await render(ctx, image, `${lib.COMFY_SUBFOLDER}/${item.code}`, `${item.code}#${i}`, description);
         const name = ctx.config.review ? lib.candidateName(await readdir(dir), out.ext) : `chibi.${out.ext}`;
         await writeFile(join(dir, name), out.bytes);
       }
@@ -832,6 +913,7 @@ async function tryImage(ctx, file, count) {
     const d = describeWorkflow(wf);
     good(`workflow：${d.text}`);
     d.notes.forEach(warn);
+    describeNotes(ctx).forEach(warn);
   }
   const ext = lib.extOf(file);
   if (!lib.MIME_OF[ext]) {
@@ -848,11 +930,18 @@ async function tryImage(ctx, file, count) {
   const dir = join(jobsDir, '_try');
   await mkdir(dir, { recursive: true });
   try {
+    let description = '';
+    if (ctx.config.describe) {
+      log(`請看圖 AI（${ctx.config.describe}）看 OC 寫描述`);
+      description = await describeOc(ctx, bytes);
+      await writeFile(join(dir, lib.DESCRIPTION), `${description}\n`);
+      good(`描述：${description}`);
+    }
     const image = await comfyUpload(ctx, bytes, `try.${ext}`, lib.MIME_OF[ext]);
     let last = null;
     for (let i = 1; i <= count; i++) {
       log(`試畫中${count > 1 ? `（${i}/${count}）` : ''}`);
-      const out = await render(ctx, image, `${lib.COMFY_SUBFOLDER}/try`, `try#${i}`);
+      const out = await render(ctx, image, `${lib.COMFY_SUBFOLDER}/try`, `try#${i}`, description);
       last = join(dir, lib.candidateName(await readdir(dir), out.ext));
       await writeFile(last, out.bytes);
       good(`畫好了：${last}`);

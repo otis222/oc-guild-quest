@@ -30,22 +30,23 @@ export interface ChibiDeps {
 }
 
 const C = COPY.chibi;
-/** 送給組員的 OC 圖：長邊縮到這麼大（PNG 保留透明，其他存成 JPEG） */
+/** 送給組員的 OC 圖：長邊縮到這麼大（PNG 存 PNG，其他存成 JPEG） */
 const SEND_MAX_PNG = 1280;
 const SEND_MAX_JPEG = 1600;
 const SEND_JPEG_QUALITY = 0.92;
 
-/** 把玩家選的圖縮小到適合傳送：PNG 保留透明（去背好的 OC 生成效果比較好），其他存成 JPEG */
-async function prepareOcImage(file: Blob): Promise<{ blob: Blob; mime: 'image/png' | 'image/jpeg' }> {
+/**
+ * 把玩家選的圖縮小到適合傳送，透明的地方鋪白底：組員電腦的 ComfyUI 和看圖 AI 讀 PNG 時，
+ * 透明的地方會變成黑色，描述和小人都會畫錯（10/19 測過）。PNG 存 PNG（不失真），其他存成 JPEG。
+ */
+export async function prepareOcImage(file: Blob): Promise<{ blob: Blob; mime: 'image/png' | 'image/jpeg' }> {
   const img = await decodeImage(file);
   const png = file.type === 'image/png';
   const size = fitLongSide(img.naturalWidth, img.naturalHeight, png ? SEND_MAX_PNG : SEND_MAX_JPEG);
   const c = canvas(size.width, size.height);
   const g = ctx2d(c);
-  if (!png) {
-    g.fillStyle = '#ffffff';
-    g.fillRect(0, 0, size.width, size.height);
-  }
+  g.fillStyle = '#ffffff';
+  g.fillRect(0, 0, size.width, size.height);
   g.drawImage(img, 0, 0, size.width, size.height);
   return png ? { blob: await toBlob(c, 'image/png'), mime: 'image/png' } : { blob: await toBlob(c, 'image/jpeg', SEND_JPEG_QUALITY), mime: 'image/jpeg' };
 }
